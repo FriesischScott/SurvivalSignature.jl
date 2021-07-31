@@ -16,7 +16,7 @@ export survivalsignature,
     percolation,
     s_t_connectivity,
     reliability,
-    percolation_preprocessor
+    percolation_preprocessor!
 
 include("percolation.jl")
 include("preprocessors.jl")

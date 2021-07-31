@@ -11,14 +11,15 @@ types = Dict(1 => collect(1:2:30), 2 => collect(2:2:30))
 @load "demo/data/grid_56_exact.jld2"
 
 ## Percolation error
-signature_percolation = percolation_preprocessor(signature_56_exact, adj)
+signature_percolation = copy(signature_56_exact)
+percolation_preprocessor!(signature_percolation, adj)
 
 absolute_error_percolation = norm(signature_56_exact .- signature_percolation)
 relative_error_percolation = absolute_error_percolation / norm(signature_56_exact)
 
 # Approximation error
 signature_monte_carlo, _ =
-    survivalsignature(adj, types, φ, 10000, 0.0, percolation_preprocessor)
+    survivalsignature(adj, types, φ, 10000, 0.0, percolation_preprocessor!)
 
 absolute_error_monte_carlo = norm(signature_percolation .- signature_monte_carlo) # Don't repeat the percolation error
 relative_error_monte_carlo = absolute_error_monte_carlo / norm(signature_percolation)

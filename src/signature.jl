@@ -12,7 +12,7 @@ function survivalsignature(
 )
     Φ, _ = prepare_survival_signature(types)
 
-    preprocessor !== nothing && (Φ = preprocessor(Φ, system))
+    preprocessor !== nothing && (preprocessor(Φ, system))
 
     indices = findall(x -> isinf(x), Φ)
     entries = @showprogress pmap(indices) do index
@@ -31,11 +31,11 @@ function survivalsignature(
     types::Dict{Int64,Array{Int64,1}},
     φ::Function,
     samples::Int64,
-    limit::Float64,
+    limit::Float64 = 0.001,
     preprocessor = nothing,
 )
     Φ, components_per_type = prepare_survival_signature(types)
-    preprocessor !== nothing && (Φ = preprocessor(Φ, system))
+    preprocessor !== nothing && (preprocessor(Φ, system))
 
     cov = zeros(size(Φ))
 

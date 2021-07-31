@@ -1,6 +1,5 @@
-function percolation_preprocessor(signature, adj)
-    Φ = copy(signature)
-    fc = percolation(adj)
+function percolation_preprocessor!(Φ, A)
+    fc = percolation(A)
 
     threshold = sum(size(Φ) .- 1) * (1 - fc)
 
@@ -10,5 +9,5 @@ function percolation_preprocessor(signature, adj)
         end
     end
 
-    return Φ
+    return nothing
 end
