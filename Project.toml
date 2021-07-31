@@ -1,7 +1,7 @@
 name = "SurvivalSignature"
 uuid = "13fa4dc1-3690-464b-a752-a9f12e029c3c"
 authors = ["Jasper Behrensdorf <behrensdorf@irz.uni-hannover.de>"]
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 BigCombinatorics = "7b33fef7-ef1d-5d54-bb67-cf96d4c8a166"
