@@ -1,4 +1,4 @@
-function reliability(t::Vector{Float64}, Φ, dists::Dict)
+function reliability(t::Vector{Float64}, Φ::Matrix{Float64}, dists::Dict)
     P = zeros(size(t))
 
     for index in CartesianIndices(Φ)
@@ -18,22 +18,19 @@ end
 
 function reliability(
     t::Vector{Float64},
-    Φ,
+    Φ::Matrix{Float64},
     types::Dict{Int64,Array{Int64,1}},
-    dists::Dict,
-    n::Int,
+    failures::Matrix{Float64},
 )
-    f = sample_failures(types, dists, n, sum(size(Φ) .- 1))
-
-    idx = map_failures_to_type(f, types)
+    idx = map_failures_to_type(failures, types)
 
     Φ_f = map_types_to_signature(idx, Φ, types)
 
-    sort!(f, dims = 2)
+    sort!(failures, dims = 2)
 
     P = zeros(size(t))
 
-    for (r_i, r) ∈ enumerate(eachrow(f))
+    for (r_i, r) ∈ enumerate(eachrow(failures))
         @inbounds P[t.<r[1]] .+= 1
         for c_i ∈ 1:length(r)-1
             if Φ_f[r_i, c_i] === 0.0
@@ -46,7 +43,7 @@ function reliability(
         end
     end
 
-    return P ./ size(f, 1)
+    return P ./ size(failures, 1)
 end
 
 function map_failures_to_type(f, types::Dict{Int64,Array{Int64,1}})
@@ -83,15 +80,4 @@ function map_types_to_signature(idx, Φ, types)
     end
 
     return Φ_f
-end
-
-function sample_failures(types, dists, n, m)
-
-    f = zeros(n, m)
-
-    for (type, components) ∈ types
-        f[:, components] = rand(dists[type], n, length(components))
-    end
-
-    return f
 end
