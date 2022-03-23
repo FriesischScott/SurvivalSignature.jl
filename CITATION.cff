@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: "Jasper"
+    given-names: "Behrensdorf"
+    orcid: "https://orcid.org/0000-0001-9628-7250"
+title: "SurvivalSignature.jl"
+version: 0.2.0
+doi: 10.5281/zenodo.5156750
+date-released: 2021-08-03
+license: MIT
+url: "https://github.com/FriesischScott/SurvivalSignature.jl"
+preferred-citation:
+  type: article
+  authors:
+    - family-names: "Jasper"
+      given-names: "Behrensdorf"
+      orcid: "https://orcid.org/0000-0001-9628-7250"
+    - family-names: "Tobias-Emanuel"
+      given-names: "Regenhardt"
+      orcid: "https://orcid.org/0000-0003-0295-3385"
+    - family-names: "Matteo"
+      given-names: "Broggi"
+      orcid: "https://orcid.org/0000-0002-3683-3907"
+    - family-names: "Michael"
+      given-names: "Beer"
+      orcid: "https://orcid.org/0000-0002-0611-0345"
+  doi: "10.1016/j.ress.2021.107935"
+  journal: "Reliability Engineering & System Safety"
+  title: "Numerically efficient computation of the survival signature for the reliability analysis of large networks"
+  pages: 107935
+  volume: 216
+  year: 2021
