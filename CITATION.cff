@@ -28,6 +28,6 @@ preferred-citation:
   doi: "10.1016/j.ress.2021.107935"
   journal: "Reliability Engineering & System Safety"
   title: "Numerically efficient computation of the survival signature for the reliability analysis of large networks"
-  pages: 107935
+  start: 107935
   volume: 216
   year: 2021
