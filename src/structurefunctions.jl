@@ -5,6 +5,9 @@ function s_t_connectivity(nodes::Vector{Int}, source::Vector{Int}, target::Vecto
         s = copy(source)
         t = copy(target)
 
+        # Remove failed nodes from s in case start and end nodes are the same
+        s = filter(sᵢ -> sᵢ in x, s)
+
         failed = setdiff(nodes, x)
 
         A[failed, :] .= 0
@@ -16,7 +19,7 @@ function s_t_connectivity(nodes::Vector{Int}, source::Vector{Int}, target::Vecto
             end
 
             A[:, s] .= 0
-            s = findall(x -> x > 0, vec(sum(A[s, :], dims = 1)))
+            s = findall(x -> x > 0, vec(sum(A[s, :], dims=1)))
 
             if length(s) == 0
                 return false
