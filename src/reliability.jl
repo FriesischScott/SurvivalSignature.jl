@@ -1,4 +1,4 @@
-function reliability(t::Vector{Float64}, Φ::Matrix{Float64}, dists::Dict)
+function reliability(t::Vector{Float64}, Φ::Array{Float64}, dists::Dict)
     P = zeros(size(t))
 
     for index in CartesianIndices(Φ)
@@ -18,7 +18,7 @@ end
 
 function reliability(
     t::Vector{Float64},
-    Φ::Matrix{Float64},
+    Φ::Array{Float64},
     types::Dict{Int64,Array{Int64,1}},
     failures::Matrix{Float64},
 )
@@ -26,7 +26,7 @@ function reliability(
 
     Φ_f = map_types_to_signature(idx, Φ, types)
 
-    sort!(failures, dims = 2)
+    sort!(failures, dims=2)
 
     P = zeros(size(t))
 
@@ -68,7 +68,7 @@ function map_types_to_signature(idx, Φ, types)
     F = ones(Int64, size(idx, 1), size(idx, 2), length(types))
 
     for (type, components) ∈ types
-        F[:, :, type] += length(components) .- cumsum(idx .== type, dims = 2)
+        F[:, :, type] += length(components) .- cumsum(idx .== type, dims=2)
     end
 
     Φ_f = zeros(size(idx))
