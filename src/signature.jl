@@ -8,7 +8,7 @@ function survivalsignature(
     system::Any,
     types::Dict{Int64,Array{Int64,1}},
     φ::Function,
-    preprocessor = nothing,
+    preprocessor=nothing,
 )
     Φ, _ = prepare_survival_signature(types)
 
@@ -31,8 +31,8 @@ function survivalsignature(
     types::Dict{Int64,Array{Int64,1}},
     φ::Function,
     samples::Int64,
-    limit::Float64 = 0.001,
-    preprocessor = nothing,
+    limit::Float64=0.001,
+    preprocessor=nothing,
 )
     Φ, components_per_type = prepare_survival_signature(types)
     preprocessor !== nothing && (preprocessor(Φ, system))
@@ -56,6 +56,124 @@ function survivalsignature(
     end
 
     return Φ, cov
+end
+
+include("rbf/basis.jl")
+include("rbf/opt.jl")
+
+struct IPMSurvivalSignature
+    X::AbstractMatrix
+    C::AbstractMatrix
+    σ::Vector{<:Real}
+    wmax::Vector{<:Real}
+    wmin::Vector{<:Real}
+end
+
+function IPMSurvivalSignature(
+    system::Any,
+    types::Dict{Int,Vector{Int}},
+    φ::Function,
+    ci::Vector{Int};
+    samples::Integer=10000,
+    covtol::Real=1e-3,
+    wtol::Real=1e-3
+)
+    components_per_type = ones(Int, length(types))
+    for (type, components) in types
+        components_per_type[type] += length(components)
+    end
+
+    fc = percolation(system)
+    threshold = sum(components_per_type .- 1) * (1 - fc)
+
+    Ω = mapreduce(t -> [t...]', vcat, Iterators.product([1:c for c in components_per_type]...))
+    Ω = [Ω[i, :] for i in 1:size(Ω, 1) if sum(Ω[i, :] .- 1) >= threshold]
+    Ω = float.(hcat(Ω...))
+
+    lb = minimum(Ω; dims=2)
+    ub = maximum(Ω; dims=2)
+
+    C = hcat([x for x in eachcol(Ω)]...)
+    tree = KDTree(C)
+
+    ranges = [range(0.0, 1.0; length=l) for l in fill(5, length(types))]
+    Xn = mapreduce(t -> [t...], hcat, Iterators.product(ranges...))
+    Xn = (Xn .* (ub .- lb) .+ lb)
+
+    idx, _ = nn(tree, Xn)
+    idx = unique(idx) # in case two have the same nearest neighbor
+
+    Xn = C[:, idx]
+    fn = @showprogress "Initial Points" map(eachcol(Xn)) do x
+        entry = CartesianIndex(Int.(x)...)
+        if (numberofcombinations(components_per_type, entry)) <= samples
+            return exactentry(entry, system, types, φ)
+        else
+            return approximateentry(entry, system, types, φ, samples, covtol)
+        end
+    end
+
+    ranges = [range(l, u, c) for (l, u, c) in zip(lb, ub, ci)]
+    centers = hcat([[c...] for c in Iterators.product(ranges...) if sum(c .- 1) > threshold]...)
+
+    Q = (getindex.(ranges, 2) .- getindex.(ranges, 1)) ./ 2
+
+    P = gaussian.(distance(Xn, centers, Q))
+    Pc = gaussian.(distance(C, centers, Q))
+
+    w = lsqr(P, fn, centers)
+
+    Lmax = sqrt(sum((ub .- lb) .^ 2))
+
+    stop = 3
+    while stop < 2
+        tree = KDTree(Xn)
+
+        candidate_idx = Not(idx)
+        candidates = @view C[:, candidate_idx]
+
+        i, D = nn(tree, candidates)
+
+        function s(x)
+            return (gaussian.(distance(x, centers, Q))*w)[1]
+        end
+
+        ∇s = [zeros(size(Xn, 1)) for _ in 1:size(Xn, 2)]
+        ∇s = map(ForwardDiff.DiffResults.GradientResult, ∇s)
+
+        ∇s = map((r, x) -> ForwardDiff.gradient!(r, s, x), ∇s, eachcol(Xn))
+        vs = ForwardDiff.DiffResults.value.(∇s)
+        ∇s = ForwardDiff.DiffResults.gradient.(∇s)
+
+        t = @views vs[i] + map((∇, a) -> dot(∇, a), ∇s[i], eachcol(candidates .- Xn[:, i]))
+
+        R = @views abs.(Pc[candidate_idx, :] * w - t)
+
+        J = D ./ maximum(D) + (1 .- D ./ Lmax) .* (R ./ maximum(R))
+
+        _, c = findmax(J)
+        Cn = candidates[:, c]
+
+        c = findfirst(x -> all(x .== Cn), eachcol(Ω))
+
+        Xn = hcat(Xn, C[:, c])
+        push!(fn, f[c])
+        push!(idx, c)
+
+        P = basis(Xn, centers, Q)
+        w_old = w
+        w = solve(P, fn, centers)
+
+        @show norm(w_old - w)
+        stop = norm(w_old - w) < wtol ? stop + 1 : 0
+    end
+
+    f_u = min.(fn .+ (fn .* cn), 1.0)
+    f_l = max.(fn .- (fn .* cn), 0.0)
+
+    w_u, w_l = ipm(Xn, f_u, f_l, centers, Q)
+
+    return IPMSurvivalSignature(Xn, centers, Q, w_u, w_l)
 end
 
 function exactentry(index::CartesianIndex, system, types, φ)

@@ -1,22 +1,29 @@
 module SurvivalSignature
 
-using LinearAlgebra,
-    IterTools,
-    ProgressMeter,
-    Statistics,
-    Random,
-    Distributions,
-    Distributed,
-    BigCombinatorics
+using BigCombinatorics
+using Distributed
+using Distributions
+using ForwardDiff
+using InvertedIndices
+using IterTools
+using JuMP
+using LinearAlgebra
+using NearestNeighbors
+using ProgressMeter
+using Random
+using SCS
+using Statistics
 
-export survivalsignature,
-    exactentry,
-    approximateentry,
-    gridnetwork,
-    percolation,
-    s_t_connectivity,
-    reliability,
-    percolation_preprocessor!
+export survivalsignature
+export exactentry
+export approximateentry
+export gridnetwork
+export percolation
+export s_t_connectivity
+export reliability
+export percolation_preprocessor!
+
+export IPMSurvivalSignature
 
 include("percolation.jl")
 include("preprocessors.jl")
