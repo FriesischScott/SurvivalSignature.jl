@@ -96,7 +96,7 @@ function IPMSurvivalSignature(
     C = hcat([x for x in eachcol(Ω)]...)
     tree = KDTree(C)
 
-    ranges = [range(0.0, 1.0; length=l) for l in fill(5, length(types))]
+    ranges = [range(0.0, 1.0; length=l) for l in fill(2, length(types))]
     Xn = mapreduce(t -> [t...], hcat, Iterators.product(ranges...))
     Xn = (Xn .* (ub .- lb) .+ lb)
 
@@ -104,14 +104,18 @@ function IPMSurvivalSignature(
     idx = unique(idx) # in case two have the same nearest neighbor
 
     Xn = C[:, idx]
-    fn = @showprogress "Initial Points" map(eachcol(Xn)) do x
+    # fn = @showprogress "Initial Points" map(eachcol(Xn)) do x
+    fn = map(eachcol(Xn)) do x
         entry = CartesianIndex(Int.(x)...)
         if (numberofcombinations(components_per_type, entry)) <= samples
-            return exactentry(entry, system, types, φ)
+            return exactentry(entry, system, types, φ), 0
         else
             return approximateentry(entry, system, types, φ, samples, covtol)
         end
     end
+
+    cn = getindex.(fn, 2)
+    fn = getindex.(fn, 1)
 
     ranges = [range(l, u, c) for (l, u, c) in zip(lb, ub, ci)]
     centers = hcat([[c...] for c in Iterators.product(ranges...) if sum(c .- 1) > threshold]...)
@@ -120,6 +124,10 @@ function IPMSurvivalSignature(
 
     P = gaussian.(distance(Xn, centers, Q))
     Pc = gaussian.(distance(C, centers, Q))
+
+    @show size(P)
+    @show size(fn)
+    @show size(centers)
 
     w = lsqr(P, fn, centers)
 
@@ -157,7 +165,16 @@ function IPMSurvivalSignature(
         c = findfirst(x -> all(x .== Cn), eachcol(Ω))
 
         Xn = hcat(Xn, C[:, c])
-        push!(fn, f[c])
+
+        entry = CartesianIndex(Int.(C[:, c])...)
+        if (numberofcombinations(components_per_type, entry)) <= samples
+            ftead, ctead = exactentry(entry, system, types, φ), 0
+        else
+            ftead, ctead = approximateentry(entry, system, types, φ, samples, covtol)
+        end
+
+        push!(fn, ftead)
+        push!(cn, ctead)
         push!(idx, c)
 
         P = basis(Xn, centers, Q)
