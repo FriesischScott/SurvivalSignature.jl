@@ -9,11 +9,9 @@ types = Dict(
     2 => findall(degrees .> 2.0),
 )
 
-# A[A.==0.0] .= Inf # ! Floy-Warshall
+replace!(A, 0.0 => Inf) # ! Floy-Warshall
 
 function floyd_warshall!(D)
-    replace!(D, 0.0 => Inf)
-
     n = size(D, 1)
 
     @inbounds for k in 1:n, i in 1:n, j in 1:n
@@ -40,7 +38,6 @@ end
 E = efficiency(copy(A))
 
 function φ(system::Array{Float64,2}, x::Vector)
-
     A = copy(system)
 
     failed = setdiff(nodes, x)

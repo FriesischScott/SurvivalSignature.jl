@@ -25,6 +25,18 @@ export percolation_preprocessor!
 
 export IPMSurvivalSignature
 
+include("ipm/intervalpredictormodel.jl")
+
+struct IPMSurvivalSignature
+    X::AbstractMatrix
+    f::AbstractVector
+    k::AbstractVector
+    fc::Real
+    ipm::IntervalPredictorModel
+end
+
+include("rbf/radialbasisfunctions.jl")
+
 include("percolation.jl")
 include("preprocessors.jl")
 include("reliability.jl")

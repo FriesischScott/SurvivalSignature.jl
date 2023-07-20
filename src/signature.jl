@@ -58,17 +58,6 @@ function survivalsignature(
     return Φ, cov
 end
 
-include("rbf/basis.jl")
-include("rbf/opt.jl")
-
-struct IPMSurvivalSignature
-    X::AbstractMatrix
-    C::AbstractMatrix
-    σ::Vector{<:Real}
-    wmax::Vector{<:Real}
-    wmin::Vector{<:Real}
-end
-
 function IPMSurvivalSignature(
     system::Any,
     types::Dict{Int,Vector{Int}},
@@ -96,7 +85,7 @@ function IPMSurvivalSignature(
     C = hcat([x for x in eachcol(Ω)]...)
     tree = KDTree(C)
 
-    ranges = [range(0.0, 1.0; length=l) for l in fill(2, length(types))]
+    ranges = [range(0.0, 1.0; length=l) for l in fill(5, length(types))]
     Xn = mapreduce(t -> [t...], hcat, Iterators.product(ranges...))
     Xn = (Xn .* (ub .- lb) .+ lb)
 
@@ -104,8 +93,7 @@ function IPMSurvivalSignature(
     idx = unique(idx) # in case two have the same nearest neighbor
 
     Xn = C[:, idx]
-    # fn = @showprogress "Initial Points" map(eachcol(Xn)) do x
-    fn = map(eachcol(Xn)) do x
+    fn = @showprogress "Initial Points" map(eachcol(Xn)) do x
         entry = CartesianIndex(Int.(x)...)
         if (numberofcombinations(components_per_type, entry)) <= samples
             return exactentry(entry, system, types, φ), 0
@@ -125,15 +113,12 @@ function IPMSurvivalSignature(
     P = gaussian.(distance(Xn, centers, Q))
     Pc = gaussian.(distance(C, centers, Q))
 
-    @show size(P)
-    @show size(fn)
-    @show size(centers)
-
     w = lsqr(P, fn, centers)
 
     Lmax = sqrt(sum((ub .- lb) .^ 2))
 
-    stop = 3
+    stop = 0
+    prog = ProgressThresh(wtol, "Adaptive Refinement:")
     while stop < 2
         tree = KDTree(Xn)
 
@@ -143,7 +128,7 @@ function IPMSurvivalSignature(
         i, D = nn(tree, candidates)
 
         function s(x)
-            return (gaussian.(distance(x, centers, Q))*w)[1]
+            return sum(gaussian.(distance(x, centers, Q)) .* w)
         end
 
         ∇s = [zeros(size(Xn, 1)) for _ in 1:size(Xn, 2)]
@@ -177,20 +162,23 @@ function IPMSurvivalSignature(
         push!(cn, ctead)
         push!(idx, c)
 
-        P = basis(Xn, centers, Q)
+        P = gaussian.(distance(Xn, centers, Q))
         w_old = w
-        w = solve(P, fn, centers)
+        w = lsqr(P, fn, centers)
 
-        @show norm(w_old - w)
+        ProgressMeter.update!(prog, norm(w_old - w))
         stop = norm(w_old - w) < wtol ? stop + 1 : 0
     end
 
     f_u = min.(fn .+ (fn .* cn), 1.0)
     f_l = max.(fn .- (fn .* cn), 0.0)
 
-    w_u, w_l = ipm(Xn, f_u, f_l, centers, Q)
+    replace!(f_u, NaN => 1 / (samples + 1))
+    replace!(f_l, NaN => 0.0)
 
-    return IPMSurvivalSignature(Xn, centers, Q, w_u, w_l)
+    ipm = IntervalPredictorModel(Xn, f_u, f_l, centers, Q)
+
+    return IPMSurvivalSignature(Xn, fn, components_per_type, fc, ipm)
 end
 
 function exactentry(index::CartesianIndex, system, types, φ)

@@ -1,4 +1,4 @@
-function reliability(t::Vector{Float64}, Φ::Array{Float64}, dists::Dict)
+function reliability(t::Vector{Float64}, dists::Dict, Φ::Array{Float64})
     P = zeros(size(t))
 
     for index in CartesianIndices(Φ)
@@ -8,12 +8,40 @@ function reliability(t::Vector{Float64}, Φ::Array{Float64}, dists::Dict)
             lk = index[k] - 1
             Fk = dists[k]
             p .*=
-                binomial(mk, lk) .* (cdf.(Fk, t) .^ (mk - lk)) .* ((1 .- cdf.(Fk, t)) .^ lk)
+                BigCombinatorics.Binomial(mk, lk) .* (cdf.(Fk, t) .^ (mk - lk)) .* ((1 .- cdf.(Fk, t)) .^ lk)
         end
         P .+= Φ[index] .* p
     end
 
     return P
+end
+
+function reliability(t::Vector{Float64}, dists::Dict, Φ::IPMSurvivalSignature)
+    Pu = zeros(size(t))
+    Pl = zeros(size(t))
+
+    threshold = sum(Φ.k .- 1) * (1 - Φ.fc)
+    number_of_types = length(Φ.k)
+
+    for index in Iterators.product([1:c for c in Φ.k]...)
+        if sum(index .- 1) < threshold
+            continue
+        end
+        p = ones(size(t))
+        for k = 1:number_of_types
+            mk = Φ.k[k] - 1
+            lk = index[k] - 1
+            Fk = dists[k]
+            p .*=
+                BigCombinatorics.Binomial(mk, lk) .* (cdf.(Fk, t) .^ (mk - lk)) .* ((1 .- cdf.(Fk, t)) .^ lk)
+        end
+        sig = evaluate(Φ.ipm, index)
+
+        Pl .+= clamp(sig[1], 0.0, 1.0) .* p
+        Pu .+= clamp(sig[2], 0.0, 1.0) .* p
+    end
+
+    return Pl, Pu
 end
 
 function reliability(
