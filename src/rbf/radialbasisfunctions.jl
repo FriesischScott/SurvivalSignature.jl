@@ -1,13 +1,6 @@
-function distance(X::AbstractMatrix, Y::AbstractMatrix, σ::AbstractVector)
-    return [sqrt(sum((x .- c) .^ 2 ./ 2σ .^ 2)) for (x, c) in Iterators.product(eachcol(X), eachcol(Y))]
-end
-
-function distance(x::AbstractVector, Y::AbstractMatrix, σ::AbstractVector)
-    return [sqrt(sum((x .- c) .^ 2 ./ 2σ .^ 2)) for c in eachcol(Y)]
-end
-
-function gaussian(x::Real)
-    return exp(-x^2)
+function basis(X::Union{AbstractMatrix,AbstractVector}, Y::AbstractMatrix, σ::AbstractVector)
+    Ψ = exp.(-[sum((x .- c) .^ 2 ./ 2σ .^ 2) for (x, c) in Iterators.product(eachcol(X), eachcol(Y))])
+    return Ψ ./ sum(Ψ; dims=2)
 end
 
 function lsqr(P::AbstractMatrix, f::AbstractVector, C::AbstractMatrix)

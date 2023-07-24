@@ -108,10 +108,10 @@ function IPMSurvivalSignature(
     ranges = [range(l, u, c) for (l, u, c) in zip(lb, ub, ci)]
     centers = hcat([[c...] for c in Iterators.product(ranges...) if sum(c .- 1) > threshold]...)
 
-    Q = (getindex.(ranges, 2) .- getindex.(ranges, 1)) ./ 2
+    σ = (getindex.(ranges, 2) .- getindex.(ranges, 1)) ./ 2
 
-    P = gaussian.(distance(Xn, centers, Q))
-    Pc = gaussian.(distance(C, centers, Q))
+    P = basis(Xn, centers, σ)
+    Pc = basis(C, centers, σ)
 
     w = lsqr(P, fn, centers)
 
@@ -128,7 +128,7 @@ function IPMSurvivalSignature(
         i, D = nn(tree, candidates)
 
         function s(x)
-            return sum(gaussian.(distance(x, centers, Q)) .* w)
+            return (basis(x, centers, σ)*w)[1]
         end
 
         ∇s = [zeros(size(Xn, 1)) for _ in 1:size(Xn, 2)]
@@ -149,9 +149,9 @@ function IPMSurvivalSignature(
 
         c = findfirst(x -> all(x .== Cn), eachcol(Ω))
 
-        Xn = hcat(Xn, C[:, c])
+        Xn = hcat(Xn, Cn)
 
-        entry = CartesianIndex(Int.(C[:, c])...)
+        entry = CartesianIndex(Int.(Cn)...)
         if (numberofcombinations(components_per_type, entry)) <= samples
             ftead, ctead = exactentry(entry, system, types, φ), 0
         else
@@ -162,12 +162,18 @@ function IPMSurvivalSignature(
         push!(cn, ctead)
         push!(idx, c)
 
-        P = gaussian.(distance(Xn, centers, Q))
         w_old = w
+
+        P = basis(Xn, centers, σ)
         w = lsqr(P, fn, centers)
 
-        ProgressMeter.update!(prog, norm(w_old - w))
-        stop = norm(w_old - w) < wtol ? stop + 1 : 0
+        if norm(w_old - w) < wtol
+            stop += 1
+        else
+            stop = 0
+        end
+
+        stop != 1 && ProgressMeter.update!(prog, norm(w_old - w))
     end
 
     f_u = min.(fn .+ (fn .* cn), 1.0)
@@ -176,7 +182,7 @@ function IPMSurvivalSignature(
     replace!(f_u, NaN => 1 / (samples + 1))
     replace!(f_l, NaN => 0.0)
 
-    ipm = IntervalPredictorModel(Xn, f_u, f_l, centers, Q)
+    ipm = IntervalPredictorModel(Xn, f_u, f_l, centers, σ)
 
     return IPMSurvivalSignature(Xn, fn, components_per_type, fc, ipm)
 end
