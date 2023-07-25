@@ -1,6 +1,6 @@
 function s_t_connectivity(nodes::Vector{Int}, source::Vector{Int}, target::Vector{Int})
 
-    φ = function (system::Array{Float64,2}, x::Vector)
+    φ = function (system::AbstractMatrix, x::Vector)
         A = copy(system)
         s = copy(source)
         t = copy(target)
