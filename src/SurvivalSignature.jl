@@ -18,6 +18,8 @@ export survivalsignature
 export exactentry
 export approximateentry
 export gridnetwork
+export random_network
+export small_world_network
 export percolation
 export s_t_connectivity
 export reliability
