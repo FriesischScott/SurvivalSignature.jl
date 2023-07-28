@@ -13,6 +13,11 @@ using ProgressMeter
 using Random
 using SCS
 using Statistics
+using HiGHS
+using Ipopt
+using OSQP
+using COSMO
+using Clarabel
 
 export survivalsignature
 export exactentry
@@ -22,6 +27,7 @@ export random_network
 export small_world_network
 export percolation
 export s_t_connectivity
+export efficiency
 export reliability
 export percolation_preprocessor!
 

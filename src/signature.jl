@@ -5,10 +5,7 @@ This evaluates all possible combinations of network states and is time consuming
 `preprocessor` can be used to exclude parts of the survival signature beforhand.
 """
 function survivalsignature(
-    system::Any,
-    types::Dict{Int64,Array{Int64,1}},
-    φ::Function,
-    preprocessor=nothing,
+    system::Any, types::Dict{Int64,Array{Int64,1}}, φ::Function, preprocessor=nothing
 )
     Φ, _ = prepare_survival_signature(types)
 
@@ -65,7 +62,7 @@ function IPMSurvivalSignature(
     ci::Vector{Int};
     samples::Integer=10000,
     covtol::Real=1e-3,
-    wtol::Real=1e-3
+    wtol::Real=1e-3,
 )
     components_per_type = ones(Int, length(types))
     for (type, components) in types
@@ -75,7 +72,9 @@ function IPMSurvivalSignature(
     fc = percolation(system)
     threshold = sum(components_per_type .- 1) * (1 - fc)
 
-    Ω = mapreduce(t -> [t...]', vcat, Iterators.product([1:c for c in components_per_type]...))
+    Ω = mapreduce(
+        t -> [t...]', vcat, Iterators.product([1:c for c in components_per_type]...)
+    )
     Ω = [Ω[i, :] for i in 1:size(Ω, 1) if sum(Ω[i, :] .- 1) >= threshold]
     Ω = float.(hcat(Ω...))
 
@@ -106,14 +105,18 @@ function IPMSurvivalSignature(
     fn = getindex.(fn, 1)
 
     ranges = [range(l, u, c) for (l, u, c) in zip(lb, ub, ci)]
-    centers = hcat([[c...] for c in Iterators.product(ranges...) if sum(c .- 1) > threshold]...)
+    centers = hcat(
+        [[c...] for c in Iterators.product(ranges...) if sum(c .- 1) > threshold]...
+    )
+
+    con = monotonicity_constraints(centers)
 
     σ = (getindex.(ranges, 2) .- getindex.(ranges, 1)) ./ 2
 
     P = basis(Xn, centers, σ)
     Pc = basis(C, centers, σ)
 
-    w = lsqr(P, fn, centers)
+    w = lsqr(P, fn, con)
 
     Lmax = sqrt(sum((ub .- lb) .^ 2))
 
@@ -128,7 +131,7 @@ function IPMSurvivalSignature(
         i, D = nn(tree, candidates)
 
         function s(x)
-            return (basis(x, centers, σ)*w)[1]
+            return (basis(x, centers, σ) * w)[1]
         end
 
         ∇s = [zeros(size(Xn, 1)) for _ in 1:size(Xn, 2)]
@@ -165,7 +168,7 @@ function IPMSurvivalSignature(
         w_old = w
 
         P = basis(Xn, centers, σ)
-        w = lsqr(P, fn, centers)
+        w = lsqr(P, fn, con)
 
         if norm(w_old - w) < wtol
             stop += 1
@@ -182,20 +185,24 @@ function IPMSurvivalSignature(
     replace!(f_u, NaN => 1 / (samples + 1))
     replace!(f_l, NaN => 0.0)
 
+    # w_u = lsqr(P, f_u, centers)
+    # w_l = lsqr(P, f_l, centers)
+
     ipm = IntervalPredictorModel(Xn, f_u, f_l, centers, σ)
+
+    # ipm = IntervalPredictorModel(centers, σ, w_u, w_l)
 
     return IPMSurvivalSignature(Xn, fn, components_per_type, fc, ipm)
 end
 
 function exactentry(index::CartesianIndex, system, types, φ)
     combinations = []
-    for (type, components) ∈ types
+    for (type, components) in types
         push!(combinations, subsets(components, index[type] - 1))
     end
 
     results = map(
-        x -> φ(system, Iterators.flatten(x) |> collect),
-        Iterators.product(combinations...),
+        x -> φ(system, collect(Iterators.flatten(x))), Iterators.product(combinations...)
     )
 
     return count(results) / length(results)
@@ -213,12 +220,12 @@ function approximateentry(
     Φ = 0
     cov = Inf
 
-    for n = 1:samples
+    for n in 1:samples
         # Generate a random network state for the current index
         x = []
-        for (type, components) ∈ types
+        for (type, components) in types
             shuffle!(components)
-            append!(x, components[1:index[type]-1])
+            append!(x, components[1:(index[type] - 1)])
         end
 
         # Evaluate the structure function and update the current approximation of Φ
@@ -227,7 +234,6 @@ function approximateentry(
 
         # Break if the cov is below the defined threshold
         Φ != 1 && cov < limit && break
-
     end
 
     return Φ, cov
