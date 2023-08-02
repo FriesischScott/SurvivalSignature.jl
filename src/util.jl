@@ -47,7 +47,6 @@ function small_world_network(n::Int, k::Int, β::Real)
 end
 
 function floyd_warshall!(D)
-    replace!(D, 0 => Inf)
     n = size(D, 1)
 
     @inbounds for k in 1:n, i in 1:n, j in 1:n

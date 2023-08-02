@@ -6,18 +6,14 @@ using Distributions
 using ForwardDiff
 using InvertedIndices
 using IterTools
-using JuMP
 using LinearAlgebra
 using NearestNeighbors
 using ProgressMeter
 using Random
 using SCS
 using Statistics
-using HiGHS
-using Ipopt
-using OSQP
+using Convex
 using COSMO
-using Clarabel
 
 export survivalsignature
 export exactentry

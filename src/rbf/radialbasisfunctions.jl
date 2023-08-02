@@ -11,19 +11,30 @@ function basis(
     return Ψ ./ sum(Ψ; dims=2)
 end
 
+# function lsqr(P::AbstractMatrix, f::AbstractVector, con::Matrix{Int})
+#     model = Model(SCS.Optimizer)
+#     set_silent(model)
+#     @variable(model, x[1:size(P, 2)])
+#     @variable(model, res[1:length(f)])
+#     @constraint(model, res .== P * x - f)
+
+#     @constraint(model, x[con[1, :]] .<= x[con[2, :]])
+
+#     @objective(model, Min, sum(res .^ 2))
+
+#     JuMP.optimize!(model)
+#     return value.(x)
+# end
+
 function lsqr(P::AbstractMatrix, f::AbstractVector, con::Matrix{Int})
-    model = Model(COSMO.Optimizer)
-    set_silent(model)
-    @variable(model, x[1:size(P, 2)])
-    @variable(model, res[1:length(f)])
-    @constraint(model, res .== P * x - f)
+    x = Variable(size(P, 2))
 
-    # @constraint(model, x[con[1, :]] .<= x[con[2, :]])
+    con = (x[con[1, :]] - x[con[2, :]]) <= 0
 
-    @objective(model, Min, sum(res .^ 2))
+    problem = minimize(sumsquares(P * x - f), con)
+    solve!(problem, SCS.Optimizer; silent_solver=true)
 
-    JuMP.optimize!(model)
-    return value.(x)
+    return Convex.evaluate(x)
 end
 
 function monotonicity_constraints(centers::AbstractMatrix)

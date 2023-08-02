@@ -102,7 +102,7 @@ function IPMSurvivalSignature(
     end
 
     cn = getindex.(fn, 2)
-    fn = getindex.(fn, 1)
+    fn = float.(getindex.(fn, 1))
 
     ranges = [range(l, u, c) for (l, u, c) in zip(lb, ub, ci)]
     centers = hcat(

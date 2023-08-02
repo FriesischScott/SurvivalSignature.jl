@@ -5,8 +5,10 @@ using Plots
 
 @load "demo/data/berlin-metro-signature-two-types-degree-2-0-5-10000.jld2"
 
-# load adjency matrix, types and structure function
-include("./models/berlin-metro-types.jl")
+# load adjency matrix, nodes and types
+include("../models/berlin-metro-types.jl")
+
+φ = efficiency(nodes, A, 0.5)
 
 N = 100
 covtol = 1e-3

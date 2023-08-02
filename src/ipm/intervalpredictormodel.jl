@@ -15,31 +15,26 @@ function IntervalPredictorModel(
     P = basis(X, centers, σ)
 
     nc = size(centers, 2)
-
-    model = Model(SCS.Optimizer)
-    set_silent(model)
-    @variable(model, x[1:(nc * 2)])
-    @variable(model, spread[1:length(f_u)])
-
-    @constraint(model, spread .== P * (x[1:nc] - x[(nc + 1):end]))
-    @objective(model, Min, mean(spread))
-
-    @constraint(model, P * x[1:nc] .>= f_u)
-    @constraint(model, P * x[(nc + 1):end] .<= f_l)
-
-    @constraint(model, x[1:nc] .>= x[(nc + 1):end])
+    x = Variable(nc)
+    y = Variable(nc)
 
     con = monotonicity_constraints(centers)
 
-    # monotonicity upper bound
-    @constraint(model, x[con[1, :]] .<= x[con[2, :]])
-    # monotonicity lower bound
-    @constraint(model, x[con[1, :] .+ nc] .<= x[con[2, :] .+ nc])
+    con_x = x[con[1, :]] <= x[con[2, :]]
+    con_y = y[con[1, :]] <= y[con[2, :]]
 
-    JuMP.optimize!(model)
+    con_ipm = x >= y
+    con_u = (P * x) >= f_u
+    con_l = (P * y) <= f_l
 
-    w_u = value.(x[1:nc])
-    w_l = value.(x[(nc + 1):end])
+    n = size(P, 2)
+
+    problem = minimize(sum(P * (x - y)) / n, [con_x, con_y, con_ipm, con_u, con_l])
+
+    solve!(problem, SCS.Optimizer; silent_solver=true)
+
+    w_u = Convex.evaluate(x)
+    w_l = Convex.evaluate(y)
 
     return IntervalPredictorModel(centers, σ, w_u, w_l)
 end
