@@ -51,7 +51,9 @@ function floyd_warshall!(D)
 
     @inbounds for k in 1:n, i in 1:n, j in 1:n
         sum = D[i, k] + D[k, j]
-        (sum < D[i, j]) && (D[i, j] = sum)
+        if sum < D[i, j]
+            D[i, j] = sum
+        end
     end
 
     return D
