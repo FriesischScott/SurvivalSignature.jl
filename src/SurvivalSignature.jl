@@ -26,18 +26,12 @@ export s_t_connectivity
 export efficiency
 export reliability
 export percolation_preprocessor!
+export spread
 
 export IPMSurvivalSignature
 
 include("ipm/intervalpredictormodel.jl")
-
-struct IPMSurvivalSignature
-    X::AbstractMatrix
-    f::AbstractVector
-    k::AbstractVector
-    fc::Real
-    ipm::IntervalPredictorModel
-end
+include("ipm/signature.jl")
 
 include("rbf/radialbasisfunctions.jl")
 
