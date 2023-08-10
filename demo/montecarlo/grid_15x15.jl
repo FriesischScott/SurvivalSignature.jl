@@ -10,10 +10,8 @@ addprocs(SlurmManager(48); N=2, exeflags="--project")
     n = 15
     m = 15
     adj = gridnetwork(n, m)
-    types = Dict(1 => collect(3:2:((n * m) - 1)), 2 => collect(2:2:((n * m) - 1)))
-    φ = s_t_connectivity(
-        [2:((n * m) - 1);], findall(!iszero, adj[1, :]), findall(!iszero, adj[:, n * m])
-    )
+    types = Dict(1 => collect(1:2:(n * m)), 2 => collect(2:2:(n * m)))
+    φ = s_t_connectivity([1:(n * m);], [1], [2])
 end
 
 N = 10000

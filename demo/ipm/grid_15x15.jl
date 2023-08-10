@@ -8,10 +8,8 @@ using Random
 n = 15
 m = 15
 adj = gridnetwork(n, m)
-types = Dict(1 => collect(3:2:((n * m) - 1)), 2 => collect(2:2:((n * m) - 1)))
-φ = s_t_connectivity(
-    [2:(n * m - 1);], findall(!iszero, adj[1, :]), findall(!iszero, adj[:, n * m])
-)
+types = Dict(1 => collect(1:2:(n * m)), 2 => collect(2:2:(n * m)))
+φ = s_t_connectivity([1:(n * m);], [1], [2])
 
 covtol = 1e-3
 wtol = 1e-3
