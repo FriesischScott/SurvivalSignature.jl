@@ -8,7 +8,7 @@ using Random
 n = 15
 m = 15
 adj = gridnetwork(n, m)
-types = Dict(1 => collect(1:2:(n * m)), 2 => collect(2:2:(n * m)))
+types = Dict(1 => collect(3:2:((n * m) - 1)), 2 => collect(2:2:((n * m) - 1)))
 φ = s_t_connectivity(
     [2:(n * m - 1);], findall(!iszero, adj[1, :]), findall(!iszero, adj[:, n * m])
 )
@@ -16,7 +16,7 @@ types = Dict(1 => collect(1:2:(n * m)), 2 => collect(2:2:(n * m)))
 covtol = 1e-3
 wtol = 1e-3
 
-ci = [15, 15]
+ci = [20, 20]
 
 signature_100 = IPMSurvivalSignature(
     adj, types, φ, ci; samples=10^2, covtol=covtol, wtol=wtol
