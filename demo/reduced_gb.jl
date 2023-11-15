@@ -3,7 +3,7 @@ using ClusterManagers
 using JLD2 # extra dependency
 using Distributions
 
-addprocs(32, exeflags = "--project")
+addprocs(32, exeflags="--project")
 
 @everywhere using SurvivalSignature, LinearAlgebra
 
@@ -29,7 +29,7 @@ end
 
     D = D .^ -1
 
-    D[diagind(D)] == 0
+    D[diagind(D)] .= 0
 
     1 / (n * (n - 1)) * sum(D)
 end
