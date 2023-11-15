@@ -1,15 +1,10 @@
-using Distributed
-using ClusterManagers
+using SurvivalSignature
+using LinearAlgebra
 using JLD2 # extra dependency
-using Distributions
 
-addprocs(32, exeflags = "--project")
+joinpath(pwd(), "demo", "models", "reduced_gb.jl") |> include
 
-@everywhere using SurvivalSignature, LinearAlgebra
-
-@everywhere joinpath(pwd(), "demo", "models", "reduced_gb.jl") |> include
-
-@everywhere function floyd_warshall!(D)
+function floyd_warshall!(D)
 
     n = size(D, 1)
 
@@ -21,7 +16,7 @@ addprocs(32, exeflags = "--project")
     return D
 end
 
-@everywhere function efficiency(D)
+function efficiency(D)
     n = size(D, 1)
 
     floyd_warshall!(D)
@@ -29,14 +24,14 @@ end
 
     D = D .^ -1
 
-    D[diagind(D)] == 0
+    D[diagind(D)] .= 0
 
     1 / (n * (n - 1)) * sum(D)
 end
 
-@everywhere E = efficiency(copy(adj))
+E = efficiency(copy(adj))
 
-@everywhere function φ(system::Array{Float64,2}, x::Vector)
+function φ(system::Array{Float64,2}, x::Vector)
 
     A = copy(system)
 
@@ -50,21 +45,10 @@ end
 
 @load "demo/data/reduced_gb_exact.jld2"
 
-samples = [1e1, 1e2, 1e3, 1e4, 1e5, 1e6]
-n = 1000
-absolute_error = zeros(length(samples), n)
-relative_error = zeros(length(samples), n)
-mse = zeros(length(samples), n)
+signature, _ = survivalsignature(adj, types, φ, 10000, 0.001, percolation_preprocessor!)
 
-for (i, s) ∈ enumerate(samples)
-    for j = 1:n
-        signature, _ =
-            survivalsignature(adj, types, φ, Int(s), 0.001, percolation_preprocessor)
+absolute_error = norm(Φ - signature)
+relative_error = norm(Φ - signature) / norm(Φ)
 
-        absolute_error[i, j] = norm(Φ - signature)
-        relative_error[i, j] = norm(Φ - signature) / norm(Φ)
-        mse[i, j] = mean((Φ - signature) .^ 2)
-    end
-end
-
-@save "reduced_gb_errors.jld2" samples absolute_error relative_error mse
+println("Absolute error: $absolute_error")
+println("Relative error: $relative_error")
