@@ -18,10 +18,16 @@ function ensure_row_array!(arr::Array)
     return arr
 end
 
-function print_array(array::Array)
+function _print(array::Array)
     array = ensure_row_array!(array)
     for row in eachrow(array)
-        println(row)
+        println(round.(row; digits=1))
+    end
+end
+
+function _print(dict::Dict)
+    for (key, value) in dict
+        println("$key: $value")
     end
 end
 
@@ -37,7 +43,6 @@ end
 # ================================ MACROS ======================================
 
 export @examine
-
 macro examine(var, value_bool::Bool=true)
     esc_var = esc(var)  # Escape the variable `var` to ensure it's captured correctly
     var_name = string(var)  # Get the variable name as a string

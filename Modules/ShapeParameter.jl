@@ -12,6 +12,8 @@ using IterTools
 
 #include("Structures.jl")
 using ..Structures: Points
+using ..Structures: Hardy, Franke, Kuo, Rippa, BehrensdorfShape
+using ..Structures: Gaussian
 
 #include("SurvivalSignatureUtils.jl")
 using ..SurvivalSignatureUtils
@@ -19,23 +21,53 @@ using ..SurvivalSignatureUtils
 #include("BasisFunction.jl")
 using ..BasisFunction
 
-# ============================= METHODS ========================================
+# ==============================================================================
 
-function hardy(points::AbstractArray)
+export computeShapeParameter, selectShapeParameterMethod
+
+# ==============================================================================
+
+function selectShapeParameterMethod(
+    method::String,
+    coordinates::AbstractArray,
+    centers::AbstractArray,
+    starting_points::Points,
+    confidence_interval::AbstractVector,
+)
+    method = lowercase(method)
+    if method == "hardy"
+        return Hardy(coordinates)
+    elseif method == "franke"
+        return Franke(coordinates)
+    elseif method == "kuo"
+        return Kuo(coordinates)
+    elseif method == "rippa"
+        return Rippa(starting_points, centers)
+    elseif method == "behrensdorf"
+        lb = minimum(coordinates; dims=2)
+        ub = maximum(coordinates; dims=2)
+
+        return BehrensdorfShape(confidence_interval, ub, lb)
+    else
+        error("Unrecognized Method: $method")
+    end
+end
+
+# ============================= METHODS ========================================
+function computeShapeParameter(Method::Hardy)
 
     # knn(k=2) returns the 2 closest points, since the 1. is itself 
-    _, d = NearestNeighbors.knn(NearestNeighbors.KDTree(points), points, 2)
+    _, d = NearestNeighbors.knn(NearestNeighbors.KDTree(Method.points), Method.points, 2)
 
     d = sum(sum(d))
 
-    return 1 / (0.815 * (d / size(points, 2)))
+    return 1 / (0.815 * (d / size(Method.points, 2)))
 end
 
-function franke(points::AbstractArray)
+function computeShapeParameter(Method::Franke)
 
     # leads to really slow adaptive refinement (change values are very high)
-
-    points = SurvivalSignatureUtils.ensure_column_array!(points)
+    points = SurvivalSignatureUtils.ensure_column_array!(Method.points)
 
     N::Int = length(points[:, 1])
 
@@ -43,84 +75,50 @@ function franke(points::AbstractArray)
     # all points, or the furthest distance between 2 points.
     D = largest_distance(points)
 
-    return 0.8 * sqrt(N) / D
+    return D / (sqrt(N) * 0.8)
 end
 
-function kuo(points::Array)
+function computeShapeParameter(Method::Kuo)
     # modified version of `franke()`
-
     # also really show adaptive refinement (possible do to formula flip)
-
+    points = SurvivalSignatureUtils.ensure_column_array!(Method.points)
     N::Int = length(points[:, 1])
 
     D = largest_distance(points)
-
-    return 0.8 * nsqrt(N, 4) / D
+    return D / (nsqrt(N, 4) * 0.8)
 end
 
-function rippa(X::AbstractArray, Y::Union{AbstractVector,Number}, centers::AbstractArray)
-    # Utilizes LOOCV (leave-one-out cross-validation)
-
-    cost_function = ϵ -> costFunction(Y, X, centers, ϵ)
+function computeShapeParameter(Method::Rippa)
+    cost_function =
+        ϵ -> costFunction(
+            Method.starting_points.solution,
+            Method.starting_points.coordinates,
+            Method.centers,
+            ϵ,
+        )
     result = optimize(cost_function, 0.1, 10.0)
 
     ϵ_opt = Optim.minimizer(result)
-    f_val = Optim.minimum(result)
+    # f_val = Optim.minimum(result)
 
     return ϵ_opt
 end
 
-function behrensdorf(ranges::AbstractArray)
-    # spread in each direction (one per type)
+function computeShapeParameter(method::BehrensdorfShape)
+    lb = method.lower
+    ub = method.upper
+    ci = method.confidence_interval
+
+    ranges = [range(l, u, c) for (l, u, c) in zip(lb, ub, ci)]
+
     return (getindex.(ranges, 2) .- getindex.(ranges, 1)) ./ 2
-end
-
-# =========================== SELECTION ========================================
-
-function selectShapeParameterMethod(method::String)
-    methods_dict = Dict(
-        "hardy" => hardy,
-        "franke" => franke,
-        "kuo" => kuo,
-        "rippa" => rippa,
-        "behrensdorf" => behrensdorf,
-    )
-
-    if haskey(methods_dict, lowercase(method))
-        return methods_dict[lowercase(method)]
-    else
-        error("Unsupported Method: $method")
-    end
-end
-
-function computeShapeParameter(
-    method::String,
-    points::AbstractArray,
-    centers::AbstractArray,
-    ranges::AbstractArray,
-    partial_coordinates::AbstractArray,
-    partial_solutions::Union{Nothing,AbstractArray,Number},
-)
-    func::Function = selectShapeParameterMethod(method)
-
-    X::AbstractArray = partial_coordinates
-    Y::Union{Nothing,AbstractArray,Number} = partial_solutions
-
-    if func == rippa    # requires different inputs
-        # X: starting points - Y: starting point outputs
-        return rippa(X, Y, centers)
-    elseif func == behrensdorf
-        return behrensdorf(ranges)
-    else
-        return func(points)
-    end
 end
 
 # ============================= UTILS ==========================================
 
 function distance_matrix(points::AbstractArray)
-    # Ensure points are in column format
-    if size(points, 1) > size(points, 2)
+    # Ensure points are in column format (rows as points)
+    if size(points, 1) < size(points, 2)
         points = points'
     end
     return pairwise(Euclidean(), points; dims=2)
@@ -131,45 +129,33 @@ function largest_distance(points::AbstractArray)
     return maximum(D)
 end
 
-function nearest_neighbor_distance(
-    target_point::AbstractArray{<:Number}, points::AbstractArray
-)
-    if size(target_point, 1) < size(target_point, 2)
-        target_point = target_point'
-    end
-    D = distance_matrix(hcat(target_point, points))
-    return minimum(filter(x -> x > 0, D[:, 1]))
-end
-
 function nsqrt(x::Number, n::Int)
     return x^(1 / n)
 end
 
 function costFunction(
-    y::Union{AbstractVector,Number},    # true solutions of starting points
-    x::AbstractArray,                   # starting points
+    solutions::Union{AbstractVector,Number},    # true solutions of starting points
+    coordinates::AbstractArray,                   # starting points
     centers::AbstractArray,
     shape_parameter::Number,
 )
-    N = length(y)
+    N = length(solutions)
 
-    A = BasisFunction.basis("gaussian", shape_parameter, x, centers)
+    A, _ = BasisFunction.basis(Gaussian(), shape_parameter, coordinates, centers)
 
     inv_A = pinv(A)  # Compute the pseudoinverse of the RBF matrix
 
-    errors = zero(y)
+    errors = zero(solutions)
     for i in 1:N
         A_i = A[:, i]
         inv_A_i = inv_A[i, :]  # Select the ith row of the pseudoinverse matrix
-        y_pred_i = y[i] - (dot(A_i, inv_A_i) / inv_A_i[i])
-        errors[i] = y[i] - y_pred_i
+        y_pred_i = solutions[i] - (dot(A_i, inv_A_i) / inv_A_i[i])
+        errors[i] = solutions[i] - y_pred_i
     end
 
     return LinearAlgebra.norm(errors)^2 / N
 end
 
 # =============================================================================
-
-export *
 
 end

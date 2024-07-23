@@ -8,12 +8,29 @@ using IterTools
 # ==============================================================================
 #include("Structures.jl")
 using ..Structures: Points
+using ..Structures: GridStart
 
 #include("SurvivalSignatureUtils.jl")
 using ..SurvivalSignatureUtils
+# ==============================================================================
+
+export generateStartingPoints
 
 # ============================== METHODS =======================================
-function gridAlignedStartingPoints(state_vectors, types)
+
+function generateStartingPoints(method::String, state_vectors, types)
+    method = lowercase(method)
+    mode = if method == "grid-aligned"
+        GridStart()
+    else
+        error("Unrecognized Method: $method")
+    end
+
+    return generateStartingPoints(mode, state_vectors, types)
+end
+
+function generateStartingPoints(method::GridStart, state_vectors, types)
+    # grid startng points
     lb = minimum(state_vectors; dims=2)
     ub = maximum(state_vectors; dims=2)
 
@@ -25,35 +42,14 @@ function gridAlignedStartingPoints(state_vectors, types)
 
     starting_points = (starting_points .* (ub .- lb) .+ lb)   # scales Xn based on ub and lb
 
-    idx, _ = nn(tree, starting_points)  # nearest neighbor (nn)
+    idx, _ = NearestNeighbors.nn(tree, starting_points)  # nearest neighbor (nn)
     idx = unique(idx)
 
     # in case two have the same nearest neighbor
     # finds nearest neighbors to the grid aligned starting points - use the C values instead.
 
-    return Points(state_vectors[:, idx], idx, nothing, nothing)
+    return Points(state_vectors[:, idx], idx, nothing, nothing), method
 end
-
-# ============================ SELECTION =======================================
-
-function selectStartingPointsMethod(method::String)
-    methods_dict = Dict("grid-aligned" => gridAlignedStartingPoints)
-
-    if haskey(methods_dict, lowercase(method))
-        methods_dict[lowercase(method)]
-    else
-        error("Unsupported Method: $method")
-    end
-end
-
-function generateStartingPoints(method::String, Ω::AbstractArray, types::Dict)
-    func::Function = selectStartingPointsMethod(method)
-
-    return func(Ω, types)
-end
-
 # ==============================================================================
-
-export *
 
 end

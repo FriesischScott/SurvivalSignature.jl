@@ -3,6 +3,7 @@ module Import
 
 export SurvivalSignatureUtils,
     Structures,
+    StructureCompilation,
     Visualization,
     Error,
     Systems,
@@ -22,6 +23,9 @@ using .SurvivalSignatureUtils
 
 include("Structures.jl")
 using .Structures
+
+include("StructureCompilation.jl")
+using .StructureCompilation
 
 include("Visualization.jl")
 using .Visualization

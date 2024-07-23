@@ -4,6 +4,9 @@ Calculate the exact survival signature of `system` in regards to the given `type
 This evaluates all possible combinations of network states and is time consuming for large networks. An optional
 `preprocessor` can be used to exclude parts of the survival signature beforhand.
 """
+
+using BigCombinatorics
+
 function survivalsignature(
     system::Any, types::Dict{Int64,Array{Int64,1}}, φ::Function, preprocessor=nothing
 )

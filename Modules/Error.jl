@@ -9,15 +9,69 @@ using LinearAlgebra
 using Statistics
 
 using ..SurvivalSignatureUtils
+using ..Structures: Model
+using ..BasisFunction
 
 # ==============================================================================
 export calculateError
 # ==============================================================================
 
+function calculateError(
+    methods::Vector{String}, models::Vector{Model}, compare::Union{Model,AbstractArray}
+)
+    errors = Vector{Dict}(undef, length(models))
+
+    for (i, model) in enumerate(models)
+        _, error = Error.calculateError(methods, model, compare)
+
+        errors[i] = error
+        model.errors = error
+    end
+
+    return models, errors
+end
+
+function calculateError(
+    methods::Vector{String}, model::Model, compare::Union{Model,AbstractArray}
+)
+    errors = Dict{String,Union{String,Float64}}()
+
+    compare_solution = isa(compare, Model) ? compare.Phi.solution : compare
+
+    for method in methods
+        errors[method] = calculateError(method, model.Phi.solution, compare_solution)
+    end
+
+    println("shape_parameter: $(model.str_method.shape_parameter_method)")
+    println("samples: $(model.sim.samples)")
+    SurvivalSignatureUtils._print(errors)
+
+    return model, errors
+end
+
+function calculateError(
+    methods::Vector{String}, arr1::AbstractArray, compare::Union{Model,AbstractArray}
+)
+    errors = Dict{String,Union{String,Float64}}()
+
+    compare_solution = isa(compare, Model) ? compare.Phi.solution : compare
+
+    for method in methods
+        errors[method] = calculateError(method, arr1, compare_solution)
+    end
+
+    errors["name"] = "unknown"
+
+    SurvivalSignatureUtils._print(errors)
+
+    return errors
+end
+
 function calculateError(method::String, arr1::AbstractArray, arr2::AbstractArray)
     @assert prod(size(arr1)) == prod(size(arr2))
 
     func = selectErrorMethod(method)
+
     return func(arr1, arr2)
 end
 
@@ -36,7 +90,7 @@ end
 function rmse(arr1::AbstractArray, arr2::AbstractArray)
     # root mean sqauared error:
 
-    # rmse = sqrt( Σ (y_i - ŷ_i)^2 / N )
+    # rmse = sqrt( Σ (y_i - ŷ_i)^2 / N )s
     # where:
     #   y_i  = arr1 
     #   ŷ_i = arr2

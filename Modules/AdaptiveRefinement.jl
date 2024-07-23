@@ -9,7 +9,7 @@ using ProgressMeter
 # ==============================================================================
 
 using ..SurvivalSignatureUtils
-using ..Structures: Points, System, Simulation, Method
+using ..Structures: Points, System, Simulation, Methods
 using ..Evaluation
 using ..BasisFunction
 using ..ShapeParameter
@@ -29,18 +29,14 @@ function adaptiveRefinement(
     evaluated_points::Points,
     sys::System,
     sim::Simulation,
-    method::Method,
+    method::Methods,
     weights::AbstractArray,
     centers::AbstractArray,
     constraints::AbstractArray,
     shape_parameter::Union{Number,AbstractArray},
 )
-    total_basis = BasisFunction.basis(
-        method.basis_function_method,
-        shape_parameter,
-        total_points.coordinates,
-        centers,
-        method.smoothness_factor,
+    total_basis, _ = BasisFunction.basis(
+        method.basis_function_method, shape_parameter, total_points.coordinates, centers
     )
 
     x = evaluated_points # evaluated points
@@ -53,7 +49,7 @@ function adaptiveRefinement(
     stop = 0
     while stop < 2
         function s(a::Points)
-            return (BasisFunction.basis(method.basis_function_method, shape_parameter, a.coordinates, centers, method.smoothness_factor) * weights)[1]
+            return (BasisFunction.basis(method.basis_function_method, shape_parameter, a.coordinates, centers)[1] * weights)[1]
         end
 
         # exploration score
@@ -76,6 +72,7 @@ function adaptiveRefinement(
 
         # update the computed state_vectors
         x.coordinates = hcat(x.coordinates, optimal_candidate)
+
         x.solution = vcat(x.solution, true_value)
         x.confidence = vcat(x.confidence, coefficient_variation)
         x.idx = vcat(x.idx, optimal_idx)
@@ -85,12 +82,8 @@ function adaptiveRefinement(
         old_weights = weights
 
         # recompute the basis Function
-        basis = BasisFunction.basis(
-            method.basis_function_method,
-            shape_parameter,
-            x.coordinates,
-            centers,
-            method.smoothness_factor,
+        basis, _ = BasisFunction.basis(
+            method.basis_function_method, shape_parameter, x.coordinates, centers
         )
 
         # update weights
@@ -160,7 +153,7 @@ function exploitationScore(
         (∇, a) -> dot(∇, a), ∇s[idx], eachcol(candidates .- X.coordinates[:, idx])
     )
 
-    return abs.(total_basis[cand_idx, :] * weights .- t)
+    return @views abs.(total_basis[cand_idx, :] * weights .- t)
 end
 
 function weightFunction(nearest_neighbor_distance::AbstractArray, l_max::Number)

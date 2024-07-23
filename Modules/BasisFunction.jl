@@ -9,86 +9,123 @@ using LinearAlgebra
 
 #include("Structures.jl")
 using ..Structures: Points
+using ..Structures: StringMethods
+using ..Structures: Gaussian, Matern, MultiQuadaratic, BehrensdorfBasis
 
 #include("SurvivalSignatureUtils.jl")
 using ..SurvivalSignatureUtils
 
 # ==============================================================================
-export basis
+export basis, selectBasisFunctionMethod
 # ==============================================================================
 
-# Define a constant dictionary for function types
-#   FUNCTION_METHODS = Dict(
-#       "gaussian" => gaussian, "matern" => matern, "behrensdorf" => behrensdorf
-#   )
+function basis(
+    method::StringMethods,
+    shape_parameter::Union{Number,AbstractVector},
+    coordinates::AbstractArray,
+    centers::AbstractArray,
+)
+    method = lowercase(method.basis_function_method)
+    mode = if method == "gaussian"
+        Gaussian()
+    elseif method == "behrensdorf"
+        BehrensdorfBasis()
+    elseif method == "matern"
+        Matern(method.smoothness_factor)
+    elseif method == "mq"
+        MultiQuadaratic(method.smoothness_factor)
+    end
+
+    return basis(mode, shape_parameter, coordinates, centers)
+end
+
+# ==============================================================================
 
 function basis(
-    function_method::String,
-    shape_parameter::Union{Number,AbstractArray},   # behrensdorf (array)
-    X::AbstractArray,                               # coordinates
-    Y::AbstractArray,                               # centers
-    smoothness_factor::Int=1,
+    method::Gaussian,
+    shape_parameter::Number,
+    coordinates::AbstractArray,
+    centers::AbstractArray,
 )
-    Ψ = if function_method == "gaussian"
-        # Compute pairwise Euclidean distances
-        dist = [
-            LinearAlgebra.norm(x .- c) for
-            (x, c) in IterTools.product(eachcol(X), eachcol(Y))
-        ]
+    dist = [
+        LinearAlgebra.norm(x .- c) for
+        (x, c) in IterTools.product(eachcol(coordinates), eachcol(centers))
+    ]
 
-        gaussian(shape_parameter, dist)
-    elseif function_method == "matern"
+    # gaussian basis function
+    Ψ = exp.(-shape_parameter^2 .* dist .^ 2)
 
-        # Compute pairwise Euclidean distances
-        dist = [
-            LinearAlgebra.norm(x .- c) for
-            (x, c) in IterTools.product(eachcol(X), eachcol(Y))
-        ]
+    # normalization - eps() avoid division by zero
 
-        matern(shape_parameter, dist, smoothness_factor)
-    elseif function_method == "behrensdorf"
-        behrensdorf(shape_parameter, X, Y)
+    return Ψ ./ (sum(Ψ; dims=2) .+ eps()), method
+end
+function basis(
+    method::MultiQuadaratic,
+    shape_parameter::Number,
+    coordinates::AbstractArray,
+    centers::AbstractArray,
+)
+    # mutliquadratic basis functions
+    dist = [
+        LinearAlgebra.norm(x .- c) for
+        (x, c) in IterTools.product(eachcol(coordinates), eachcol(centers))
+    ]
+
+    Ψ = if method.degree == 1
+        sqrt.(dist .^ 2 .+ shape_parameter^2)
+    elseif method.degree == 2
+        sqrt.(dist .^ 2 .* shape_parameter^2 .+ 1)
     else
-        error("Unsupported function type: $function_type")
+        error("Degree must be 1 or 2 - Inputed: $(method.degree)")
     end
-
-    return Ψ ./ (sum(Ψ; dims=2) .+ eps()) # normalization - eps() avoid division by zero
+    # normalization - eps() avoid division by zero
+    return Ψ ./ (sum(Ψ; dims=2) .+ eps()), method
 end
 
-function gaussian(shape_parameter::Union{Number,AbstractArray}, X::AbstractMatrix)
-    return exp.(-shape_parameter^2 .* X .^ 2)
-end
-
-function matern(
-    shape_parameter::Union{Number,AbstractArray}, X::AbstractMatrix, smoothness_factor::Int
+function basis(
+    method::Matern,
+    shape_parameter::Number,
+    coordinates::AbstractArray,
+    centers::AbstractArray,
 )
-    if smoothness_factor == 1
-        return exp.(-shape_parameter .* X)
-    elseif smoothness_factor == 2
-        return (1 .+ shape_parameter .* X) .* exp.(-shape_parameter .* X)
-    elseif smoothness_factor == 3
-        return (
-            (3 .+ 3 .* shape_parameter .* X + shape_parameter^2 .* X .^ 2) .*
-            exp.(-shape_parameter .* X)
-        )
+    # matern basis function
+    dist = [
+        LinearAlgebra.norm(x .- c) for
+        (x, c) in IterTools.product(eachcol(coordinates), eachcol(centers))
+    ]
+
+    Ψ = if method.smoothness_factor == 1
+        exp.(-shape_parameter .* dist)
+    elseif method.smoothness_factor == 2
+        (1 .+ shape_parameter .* dist) .* exp.(-shape_parameter .* dist)
+    elseif method.smoothness_factor == 3
+        (3 .+ 3 .* shape_parameter .* dist + shape_parameter^2 .* dist .^ 2) .*
+        exp.(-shape_parameter .* dist)
     else
-        error("Smoothness Factor MUST BE 1, 2, or 3")
+        error("Smoothness Factor MUST BE 1, 2, or 3 - Inputed: $(method.smoothness_factor)")
     end
+    # normalization - eps() avoid division by zero
+    return Ψ ./ (sum(Ψ; dims=2) .+ eps()), method
 end
 
-function behrensdorf(
-    shape_parameter::Union{Number,AbstractArray}, X::AbstractArray, centers::AbstractArray
+function basis(
+    method::BehrensdorfBasis,
+    shape_parameter::Union{Number,AbstractVector{Float64}},
+    coordinates::AbstractArray,
+    centers::AbstractArray,
 )
+    # behrensdorf basis function - should be the same as gaussian - testing necessary
     Ψ =
         exp.(
             -[
-                sum((x .- c) .^ 2 ./ 2 .* shape_parameter .^ 2) for
-                (x, c) in Iterators.product(eachcol(X), eachcol(centers))
+                sum((x .- c) .^ 2 ./ 2shape_parameter .^ 2) for
+                (x, c) in Iterators.product(eachcol(coordinates), eachcol(centers))
             ]
         )
-    return Ψ
+
+    # normalization - eps() avoid division by zero
+    return Ψ ./ (sum(Ψ; dims=2) .+ eps()), method
 end
 
-# test behrensdorf and gaussian
 # ==============================================================================
 end

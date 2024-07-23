@@ -6,7 +6,7 @@ using ProgressMeter # @showprogress
 using SurvivalSignature
 
 #include("Structures.jl")
-using ..Structures: System, Simulation, Method, Points, Model
+using ..Structures: System, Simulation, Methods, Points, Model
 using ..SurvivalSignatureUtils
 using ..BasisFunction
 
@@ -17,7 +17,7 @@ include("../src/signature.jl")
 export computeSurvivalSignatureEntry, generateStateVectors, evaluate
 # ==============================================================================
 
-function evaluate(model::Model)
+function evaluate(model::Model)::Model
     for idx in CartesianIndices(model.Phi.coordinates)
         @assert [Tuple(idx)...] == model.Phi.coordinates[idx]
 
@@ -35,28 +35,24 @@ function evaluate(model::Model)
 end
 
 function evaluateSurrogate(
-    state_vector::AbstractVector,
-    weights::AbstractArray,
-    shape_parameter::Union{Number,AbstractArray},
-    centers::AbstractArray,
-    method::Method,
-)
-    basis = BasisFunction.basis(
-        method.basis_function_method,
-        shape_parameter,
-        state_vector,
-        centers,
-        method.smoothness_factor,
+    state_vector::Vector,
+    weights::Array,
+    shape_parameter::Union{Number,Array},
+    centers::Array,
+    method::Methods,
+)::Float64
+    basis, _ = BasisFunction.basis(
+        method.basis_function_method, shape_parameter, state_vector, centers
     )
 
     s = (basis * weights)[1]
 
     # fit between 0 and 1 
-    return min(max(s, 0), 1)
+    return min(max(s, 0.0), 1.0)
 end
 
 function computeSurvivalSignatureEntry(
-    sys::System, sim::Simulation, state_vector::AbstractArray{<:Number}
+    sys::System, sim::Simulation, state_vector::Array{<:Number}
 )
     components_per_type = groupComponents(sys.types)
 
@@ -69,7 +65,7 @@ function computeSurvivalSignatureEntry(
             return SurvivalSignature.exactentry(
                 entry, sys.adj, sys.types, sys.connectivity
             ),
-            0
+            0.0
         else
             # Approximate value with calculated coefficient of variation
             return SurvivalSignature.approximateentry(
@@ -91,7 +87,7 @@ function computeSurvivalSignatureEntry(
 end
 
 # move this function to a more appropriate module
-function generateStateVectors(sys::System)
+function generateStateVectors(sys::System)::Tuple{Array,Array,Float64}
     components_per_type = groupComponents(sys.types)
 
     # cartersian coordinates of number of each type. 
@@ -102,7 +98,7 @@ function generateStateVectors(sys::System)
         fc = SurvivalSignature.percolation(sys.adj)
         threshold = sum(components_per_type .- 1) * (1 - fc)
     else
-        threshold = 0
+        threshold = 0.0
     end
 
     # percolate based on threshold
@@ -122,7 +118,7 @@ function generateStateVectors(sys::System)
 end
 
 # move this function to a more appropriate module
-function groupComponents(types)
+function groupComponents(types::Dict{Int64,Vector{Int64}})
     components_per_type = ones(Int, length(types)) # initalize variable
 
     for (type, components) in types

@@ -4,7 +4,7 @@ using Convex
 using SCS
 # ==============================================================================
 using ..SurvivalSignatureUtils
-using ..Structures: Points, Method, PredictorModel
+using ..Structures: Points, Methods, PredictorModel
 using ..BasisFunction
 
 # needed for monotonicity_constraints
@@ -22,14 +22,10 @@ function intervalPredictor(
     centers::AbstractArray,
     shape_parameter::Union{Number,AbstractArray},
     weights::AbstractArray,
-    method::Method,
+    method::Methods,
 )
-    basis = BasisFunction.basis(
-        method.basis_function_method,
-        shape_parameter,
-        evaluated_points.coordinates,
-        centers,
-        method.smoothness_factor,
+    basis, _ = BasisFunction.basis(
+        method.basis_function_method, shape_parameter, evaluated_points.coordinates, centers
     )
 
     num_centers = size(centers, 2)

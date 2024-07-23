@@ -1,44 +1,49 @@
 module Structures
 
 # ==============================================================================
-
-#include("SurvivalSignatureUtils.jl")
 using ..SurvivalSignatureUtils
 
 # ==============================================================================
-
-export System, Simulation, Method, Points, PredictorModel
+export System, Simulation, StringMethods, Methods
+export Model, PredictorModel
+export Gaussian, Matern, MultiQuadaratic, BehrensdorfBasis
+export MonteCarloSimulation, RadialBasisSimulation, IntervalPredictorSimulation
+export Hardy, Franke, Kuo, Rippa, BehrensdorfShape
+export GridCenters
+export GridStart
 
 # ==============================================================================
-
 struct System
     adj::AbstractArray
     connectivity::Any
-    types::Dict
+    types::Dict{Int64,Vector{Int64}}
     percolation::Bool
 
     # Constructor with default values 
     function System(
-        adj::AbstractArray, connectivity::Any, types::Dict, percolation::Bool=true
+        adj::AbstractArray,
+        connectivity::Any,
+        types::Dict{Int64,Vector{Int64}},
+        percolation::Bool=true,
     )
         return new(adj, connectivity, types, percolation)
     end
 end
 
-mutable struct Simulation # mutable to add threshold
+mutable struct Simulation
     samples::Int
     variation_tolerance::Float64
     weight_change_tolerance::Float64
-    confidence_interval::AbstractVector{Int}
-    threshold::Union{Nothing,Number}  # nothing prior to percolation
+    confidence_interval::Vector{Int}
+    threshold::Union{Number,Nothing}  # nothing prior to percolation
 
     # Constructor with default values
     function Simulation(
         samples::Int=1000,
         variation_tolerance::Float64=1e-3,
         weight_change_tolerance::Float64=1e-3,
-        confidence_interval::AbstractVector{Int}=[15, 15],
-        threshold::Union{Nothing,Number}=nothing,
+        confidence_interval::Vector{Int}=[15, 15],
+        threshold::Union{Number,Nothing}=nothing,
     )
         return new(
             samples,
@@ -50,7 +55,7 @@ mutable struct Simulation # mutable to add threshold
     end
 end
 
-mutable struct Method
+@allow_nothing struct StringMethods
     simulation_method::String
     starting_points_method::String
     centers_method::String
@@ -60,13 +65,13 @@ mutable struct Method
     smoothness_factor::Int
 
     # Constructor with default values
-    function Method(
+    function StringMethods(
         simulation_method::String="monte-carlo",
-        starting_points_method::String="grid-aligned",
-        centers_method::String="grid-aligned",
+        starting_points_method::String="grid",
+        centers_method::String="grid",
         weight_change_method::String="norm",
-        shape_parameter_method::String="behrensdorf",
-        basis_function_method::String="behrensdorf",
+        shape_parameter_method::String="hardy",
+        basis_function_method::String="gaussian",
         smoothness_factor::Int=1,
     )
         return new(
@@ -81,35 +86,106 @@ mutable struct Method
     end
 end
 
-# adding comments within a struct with the macro @allow_nothing causes issues.
+# Adding comments within a struct with the macro @allow_nothing causes issues.
 @allow_nothing struct Points
-    coordinates::Any
-    idx::Union{Number,AbstractArray}
-    solution::Union{Number,AbstractArray}
-    confidence::Union{Number,AbstractArray}
+    coordinates::Array
+    idx::Union{Number,Vector,Matrix}
+    solution::Union{Number,Vector,Matrix}
+    confidence::Union{Number,Vector,Matrix}
 end
 
-# coordinates will almost always be an Array, but any allows for varible types 
+# Coordinates will almost always be an Array, but Any allows for variable types 
 # used in some modules where it is unreasonable to predict or write them all 
 
-# =========================== MODELS ===========================================
-struct Model
-    Phi::Points
-    model::Any                # specific to the type of simulation
-    sys::System               # for post-proccessing access
-    sim::Simulation
-    method::Method
+# ============================== BASIS FUNCTIONS ===============================
+
+struct Gaussian end
+
+struct Matern
+    smoothness_factor::Int
 end
 
-# used for Interval Predictor Models
+struct MultiQuadaratic
+    degree::Int
+end
+
+struct BehrensdorfBasis end
+
+# ============================== SIMULATIONS ===================================
+
+struct MonteCarloSimulation end
+
+struct RadialBasisSimulation end
+
+struct IntervalPredictorSimulation end
+
+# ============================= SHAPE PARAMETERS ================================
+
+struct Hardy
+    points::Array
+end
+
+struct Franke
+    points::Array
+end
+
+struct Kuo
+    points::Array
+end
+
+struct Rippa
+    starting_points::Points
+    centers::Array
+end
+
+struct BehrensdorfShape
+    confidence_interval::Vector{Int}
+    upper::Array
+    lower::Array
+end
+
+# ================================ CENTERS =====================================
+
+struct GridCenters end
+
+# ================================ STARTING ====================================
+
+struct GridStart end
+
+# ==============================================================================
+
+struct Methods
+    simulation_method::Union{
+        MonteCarloSimulation,RadialBasisSimulation,IntervalPredictorSimulation
+    }
+    starting_points_method::Union{GridStart,Nothing}
+    centers_method::Union{GridCenters,Nothing}
+    weight_change_method::Union{String,Nothing}
+    shape_parameter_method::Union{Hardy,Franke,Kuo,Rippa,BehrensdorfShape,Nothing}
+    basis_function_method::Union{Gaussian,Matern,MultiQuadaratic,BehrensdorfBasis,Nothing}
+end
+
+# =========================== MODELS ===========================================
+# Used for Interval Predictor Models
 struct PredictorModel
     evaluated_points::Points
-    centers::AbstractArray
-    shape_parameter::Union{Number,AbstractArray}
-    weights::AbstractArray
-    w_u::Vector             # not sure what 'u' stands for
-    w_l::Vector             # not sure what 'l' stands for
+    centers::Array
+    shape_parameter::Union{Number,Array}
+    weights::Array
+    w_u::Vector{Float64}
+    w_l::Vector{Float64}
 end
+
+mutable struct Model
+    Phi::Points
+    model::Union{PredictorModel,Nothing}                # Specific to the type of simulation
+    sys::System                                 # For post-processing access
+    sim::Simulation
+    method::Methods
+    str_method::StringMethods
+    errors::Union{Nothing,Dict{String,Float64}}
+end
+
 # ==============================================================================
 
 end

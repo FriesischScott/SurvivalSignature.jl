@@ -1,130 +1,105 @@
 using SurvivalSignature
 using ProgressMeter
 using JLD2              # needed for load
-using Statistics        # needed for mean
-
-using Profile
-using ProfileView
 # ==============================================================================
 
 include("Modules/Import.jl")
 using .Import
 
 using ..SurvivalSignatureUtils
-using ..Structures: System, Simulation, Method, Model
-using ..BasisFunction
+using ..Structures: System, Simulation, Model, Methods, StringMethods
+using ..StructureCompilation
 using ..Error: calculateError
 using ..Systems
-# ================================ INPUTS ======================================
+using ..Visualization: plotError
 
-system_type = "grid"                 # ["grid"]
-percolation_bool = true
+function main()
+    # ================================ INPUTS ==================================
 
-# currently issues when n and m are greater than 11.  - using behernsdorf
-# also an error if n and m are too small (less than 7 each)
-n = 15
-m = 15
+    system_type::String = "grid"                 # ["grid"]
+    percolation::Bool = true
 
-# Simulation Parameters
-samples = 10^2
-covtol = 1e-3   # coeficient of varriation tolerance
-wtol = 1e-3    # weight change tolerance
-ci = [15, 15]   # confidence interval 
+    # currently issues when n and m are greater than 11.  - using behrensdorf
+    # also an error if n and m are too small (less than 7 each)
+    n::Int = 15
+    m::Int = 15
 
-# Methods
-simulation_method = "interval-predictor"  # ["monte-carlo", "radial-basis-function", "interval-predictor"]
-starting_points_method = "grid-aligned"   # ["grid-aligned"]
-centers_method = "grid-aligned"           # ["grid-aligned"]
-weight_change_method = "norm"             # ["norm"]
-shape_parameter_method = "behrensdorf"        #["hardy", "franke", "kuo", "rippa", "behrensdorf"]
-basis_function_method = "matern"          #["gaussian", "matern", "behrensdorf"]
-smoothness_factor = 3                    # only requred for matern [1, 2, 3]
+    # Simulation Parameters
+    samples::Union{Int,Vector{Int}} = [1, 10, 100, 1000]
+    covtol::Float64 = 1e-3                       # coeficient of varriation tolerance
+    wtol::Float64 = 1e-3                         # weight change tolerance
+    ci::Vector{Int} = [15, 15]          # confidence interval 
 
-# ======================== STRUCT REFINEMENT ===================================
+    # Methods
+    # ["monte-carlo", "radial-basis-function", "interval-predictor"]
+    simulation_method::Union{String,Vector{String}} = "interval-predictor"
+    starting_points_method::Union{String,Vector{String}} = "grid-aligned"   # ["grid-aligned"]
+    centers_method::Union{String,Vector{String}} = "grid-aligned"           # ["grid-aligned"]
+    weight_change_method::Union{String,Vector{String}} = "norm"             # ["norm"]
+    # only 'hardy' and 'rippa' seems to function correctly (i.e. result in reasonable error)
+    #["hardy", "franke", "kuo", "rippa", "behrensdorf"]
+    shape_parameter_method::Union{String,Vector{String}} = ["hardy", "behrensdorf"]
+    basis_function_method::Union{String,Vector{String}} = "gaussian"       #["gaussian", "matern", "behrensdorf", "mq"]
+    smoothness_factor::Int = 3                                             # only requred for matern [1, 2, 3]
+    #                                                                     # and mq [1, 2]
 
-# 'behrensdorf' has a different basis function method, and must be adjusted accordingly
-if lowercase(shape_parameter_method) == "behrensdorf"
-    basis_function_method = "behrensdorf"
+    # Error
+    error_type::Union{Vector{String},String} = ["rmse", "rae"]
+
+    # ======================== STRUCT REFINEMENT ===============================
+
+    sys::System = Systems.generateSystem(system_type, n, m; percolation_bool=percolation)
+
+    sims::Union{Vector{Simulation},Simulation} = StructureCompilation.compileSimulation(
+        samples, covtol, wtol, ci
+    )
+
+    str_methods::Union{Vector{StringMethods},StringMethods} = StructureCompilation.compileMethods(
+        simulation_method,
+        starting_points_method,
+        centers_method,
+        weight_change_method,
+        shape_parameter_method,
+        basis_function_method,
+        smoothness_factor,
+    )
+
+    # =============================== SIMULATE =================================
+
+    signatures::Union{Vector{Model},Model} = Simulate.simulate(
+        simulation_method, sys, sims, str_methods
+    )
+
+    # ============================= "TRUE SOLUTION" ============================
+
+    # sim_mc = Structures.Simulation(samples, covtol, wtol, ci, nothing) 
+    # str_method_mc = Structures.StringMethods("monte-carlo")
+    # signature_mc = Simulate.simulate("monte-carlo", sys, sim_mc, str_method_mc)
+
+    #true values - apparently this outputs a Φ - which is the true value solutions
+    @load "demo/data/grid-network-15x15-MC-10000.jld2"
+
+    # =============================== ERROR ====================================
+
+    println("Calculating Error...")
+    println("--------------------------------------------------------")
+
+    signatures, errors = Error.calculateError(error_type, signatures, Φ)
+
+    println("--------------------------------------------------------")
+
+    #plt = Visualization.plotErrorComparison(errors...)
+
+    #display(plt)
+
+    println("Errors Calculated.")
+    return println("")
 end
 
-sys = Systems.generateSystem(system_type, n, m; percolation_bool=percolation_bool)
-sim = Structures.Simulation(samples, covtol, wtol, ci, nothing)
-method = Structures.Method(
-    simulation_method,
-    starting_points_method,
-    centers_method,
-    weight_change_method,
-    shape_parameter_method,
-    basis_function_method,
-    smoothness_factor,
-)
+# =============================== RUN ==========================================
+main()
 
-# ============================= SIMULATE =======================================
-
-# this is slower than behernsdorfs version 
-# possibly just due to more if statements because of methods, 
-# but i cant get the Profiler to work
-signature = Simulate.simulate(sys, sim, method)
-
-method = Structures.Method("monte-carlo")
-# signature_mc = Simulate.simulate(sys, sim, method)
-
-# =============================== ERROR ========================================
-
-# true values - apparently this outputs a Φ - which is the true value solutions
-@load "demo/data/grid-network-15x15-MC-10000.jld2"
-
-function behrensdorfRSME(signature::Model, comparison::Matrix) #rmse()
-    w = signature.model.weights
-    threshold = signature.sim.threshold
-
-    e = Float64[]
-
-    for idx in CartesianIndices(comparison)
-        if sum([Tuple(idx)...] .- 1) < threshold
-            continue
-        end
-        s = (BasisFunction.basis(signature.method.basis_function_method, signature.model.shape_parameter, [Tuple(idx)...], signature.model.centers, signature.method.smoothness_factor) * w)[1]
-
-        push!(e, s - comparison[idx])
-    end
-    return sqrt(Statistics.mean(e .^ 2))
-end
-function behrensdorfRAE(signature::Model, comparison::Matrix)
-    w = signature.model.weights
-    threshold = signature.sim.threshold
-
-    e = Float64[]
-    y = Float64[]
-
-    for idx in CartesianIndices(comparison)
-        if sum([Tuple(idx)...] .- 1) < threshold
-            continue
-        end
-        s = (BasisFunction.basis(signature.method.basis_function_method, signature.model.shape_parameter, [Tuple(idx)...], signature.model.centers, signature.method.smoothness_factor) * w)[1]
-
-        push!(e, s - comparison[idx])
-        push!(y, comparison[idx])
-    end
-    return Statistics.mean(abs.(e)) / Statistics.mean(abs.(y .- Statistics.mean(y)))
-end
-
-println("Calculating Error...")
-
-error_val_rmse = Error.calculateError("rmse", signature.Phi.solution, Φ)
-error_val_rae = Error.calculateError("rae", signature.Phi.solution, Φ)
-
-error_behrensdorf_rmse = behrensdorfRSME(signature, Φ)
-error_behrensdorf_rae = behrensdorfRAE(signature, Φ)
-
-println("\trmse: $error_val_rmse")
-println("\trae: $error_val_rae")
-println("\tbehrensdorf_rmse: $error_behrensdorf_rmse")
-println("\tbehrensdorf_rae: $error_behrensdorf_rae")
-
-println("Errors Calculated.")
-println("")
-
+#
 #
 #
 #
