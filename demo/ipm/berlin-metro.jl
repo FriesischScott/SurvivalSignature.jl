@@ -16,7 +16,7 @@ addprocs(12; exeflags="--project")
     φ = efficiency(nodes, A, 0.5)
 end
 
-N = 1000
+N = 10000
 covtol = 1e-3
 wtol = 1e-3
 
