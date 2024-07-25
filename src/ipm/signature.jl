@@ -43,7 +43,7 @@ function survivalsignature(
     idx = unique(idx) # in case two have the same nearest neighbor
 
     Xn = C[:, idx]
-    fn = @showprogress "Initial Points" map(eachcol(Xn)) do x
+    fn = @showprogress "Initial Points" pmap(eachcol(Xn)) do x
         entry = CartesianIndex(Int.(x)...)
         if (numberofcombinations(components_per_type, entry)) <= samples
             return exactentry(entry, system, types, φ), 0
@@ -62,7 +62,7 @@ function survivalsignature(
 
     con = monotonicity_constraints(centers)
 
-    σ = (getindex.(ranges, 2) .- getindex.(ranges, 1)) ./ 2
+    σ = (getindex.(ranges, 2) .- getindex.(ranges, 1))
 
     P = basis(Xn, centers, σ)
     Pc = basis(C, centers, σ)
@@ -73,7 +73,7 @@ function survivalsignature(
 
     stop = 0
     prog = ProgressThresh(wtol, "Adaptive Refinement:")
-    while stop < 2
+    while stop < 3
         tree = KDTree(Xn)
 
         candidate_idx = Not(idx)
@@ -127,7 +127,7 @@ function survivalsignature(
             stop = 0
         end
 
-        stop != 1 && ProgressMeter.update!(prog, norm(w_old - w))
+        (stop == 0 || stop == 3) && ProgressMeter.update!(prog, norm(w_old - w))
     end
 
     f_u = min.(fn .+ (fn .* cn), 1.0)
