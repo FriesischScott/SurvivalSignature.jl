@@ -17,7 +17,7 @@ function lsqr(P::AbstractMatrix, f::AbstractVector, con::Matrix{Int})
     cons = x[con[1, :]] <= x[con[2, :]]
 
     problem = minimize(sumsquares(P * x - f), cons)
-    solve!(problem, SCS.Optimizer; silent_solver=true)
+    solve!(problem, SCS.Optimizer; silent=true)
 
     return Convex.evaluate(x)
 end

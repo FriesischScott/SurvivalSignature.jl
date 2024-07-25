@@ -31,7 +31,7 @@ function IntervalPredictorModel(
 
     problem = minimize(sum(P * (x - y)) / n, [con_x, con_y, con_ipm, con_u, con_l])
 
-    solve!(problem, SCS.Optimizer; silent_solver=true)
+    solve!(problem, SCS.Optimizer; silent=true)
 
     w_u = Convex.evaluate(x)
     w_l = Convex.evaluate(y)
