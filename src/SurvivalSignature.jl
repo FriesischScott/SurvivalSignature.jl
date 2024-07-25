@@ -13,7 +13,6 @@ using Random
 using SCS
 using Statistics
 using Convex
-using COSMO
 
 export survivalsignature
 export exactentry
