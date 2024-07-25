@@ -67,7 +67,7 @@ function efficiency(D)
 
     D = D .^ -1
 
-    D[diagind(D)] == 0
+    D[diagind(D)] .= 0
 
     return 1 / (n * (n - 1)) * sum(D)
 end
