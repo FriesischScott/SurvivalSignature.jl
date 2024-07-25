@@ -1,8 +1,7 @@
 using Distributed
-using ClusterManagers
-using JLD2 # extra dependency
+using JLD2
 
-addprocs(SlurmManager(48); N=2, exeflags="--project")
+addprocs(12; exeflags="--project")
 
 @everywhere begin
     using SurvivalSignature
