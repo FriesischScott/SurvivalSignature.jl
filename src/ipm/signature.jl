@@ -6,7 +6,7 @@ struct IPMSurvivalSignature
     ipm::IntervalPredictorModel
 end
 
-function IPMSurvivalSignature(
+function survivalsignature(
     system::Any,
     types::Dict{Int,Vector{Int}},
     φ::Function,
@@ -136,12 +136,7 @@ function IPMSurvivalSignature(
     replace!(f_u, NaN => 1 / (samples + 1))
     replace!(f_l, NaN => 0.0)
 
-    # w_u = lsqr(P, f_u, centers)
-    # w_l = lsqr(P, f_l, centers)
-
     ipm = IntervalPredictorModel(Xn, f_u, f_l, centers, σ)
-
-    # ipm = IntervalPredictorModel(centers, σ, w_u, w_l)
 
     return IPMSurvivalSignature(Xn, fn, components_per_type, fc, ipm)
 end

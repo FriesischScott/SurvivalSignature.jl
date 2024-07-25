@@ -1,10 +1,7 @@
-using Distributions
-using JLD2 # extra dependency
-using LinearAlgebra
 using SurvivalSignature
-using Plots
-using Random
+using JLD2
 using Printf
+using Statistics
 
 n = 15
 m = 15
@@ -55,15 +52,13 @@ function rae(signature::IPMSurvivalSignature, Φ::Matrix)
     return mean(abs.(e)) / mean(abs.(y .- mean(y)))
 end
 
-signature_100 = IPMSurvivalSignature(
-    adj, types, φ, ci; samples=10^2, covtol=covtol, wtol=wtol
-)
+signature_100 = survivalsignature(adj, types, φ, ci; samples=10^2, covtol=covtol, wtol=wtol)
 
-signature_1000 = IPMSurvivalSignature(
+signature_1000 = survivalsignature(
     adj, types, φ, ci; samples=10^3, covtol=covtol, wtol=wtol
 )
 
-signature_10000 = IPMSurvivalSignature(
+signature_10000 = survivalsignature(
     adj, types, φ, ci; samples=10^4, covtol=covtol, wtol=wtol
 )
 
