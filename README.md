@@ -89,7 +89,7 @@ If the cdfs of the failure time distributions for each component type are known,
 distributions = Dict(1 => Exponential(1), 2 => Weibull(2, 1))
 time = [0:0.001:1;]
 
-P = reliability(time, Φ, distributions)
+P = reliability(time, Distributions, Φ)
 ```
 
 Alternatively, the reliability can be approximated by providing a `NxM Matrix{Float64}` of failure times where `N` is the number of samples and `M` the number of components.
@@ -117,7 +117,7 @@ Here, `ci` refers to the number of center points used in each dimension of the u
 The reliability analysis returns the upper and lower bound of the reliability when used with the interval predictor model.
 
 ```julia
-P_l, P_u = reliability(time, ipmsignature, distributions)
+P_l, P_u = reliability(time, distributions, ipmsignature)
 ```
 
 ## References
