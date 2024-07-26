@@ -89,7 +89,7 @@ If the cdfs of the failure time distributions for each component type are known,
 distributions = Dict(1 => Exponential(1), 2 => Weibull(2, 1))
 time = [0:0.001:1;]
 
-P = reliability(time, Distributions, Φ)
+P = reliability(time, distributions, Φ)
 ```
 
 Alternatively, the reliability can be approximated by providing a `NxM Matrix{Float64}` of failure times where `N` is the number of samples and `M` the number of components.
