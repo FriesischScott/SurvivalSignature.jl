@@ -5,10 +5,7 @@ This evaluates all possible combinations of network states and is time consuming
 `preprocessor` can be used to exclude parts of the survival signature beforhand.
 """
 function survivalsignature(
-    system::Any,
-    types::Dict{Int64,Array{Int64,1}},
-    φ::Function,
-    preprocessor = nothing,
+    system::Any, types::Dict{Int64,Array{Int64,1}}, φ::Function, preprocessor=nothing
 )
     Φ, _ = prepare_survival_signature(types)
 
@@ -31,8 +28,8 @@ function survivalsignature(
     types::Dict{Int64,Array{Int64,1}},
     φ::Function,
     samples::Int64,
-    limit::Float64 = 0.001,
-    preprocessor = nothing,
+    limit::Float64=0.001,
+    preprocessor=nothing,
 )
     Φ, components_per_type = prepare_survival_signature(types)
     preprocessor !== nothing && (preprocessor(Φ, system))
@@ -60,13 +57,12 @@ end
 
 function exactentry(index::CartesianIndex, system, types, φ)
     combinations = []
-    for (type, components) ∈ types
+    for (type, components) in types
         push!(combinations, subsets(components, index[type] - 1))
     end
 
     results = map(
-        x -> φ(system, Iterators.flatten(x) |> collect),
-        Iterators.product(combinations...),
+        x -> φ(system, collect(Iterators.flatten(x))), Iterators.product(combinations...)
     )
 
     return count(results) / length(results)
@@ -84,12 +80,12 @@ function approximateentry(
     Φ = 0
     cov = Inf
 
-    for n = 1:samples
+    for n in 1:samples
         # Generate a random network state for the current index
         x = []
-        for (type, components) ∈ types
+        for (type, components) in types
             shuffle!(components)
-            append!(x, components[1:index[type]-1])
+            append!(x, components[1:(index[type] - 1)])
         end
 
         # Evaluate the structure function and update the current approximation of Φ
@@ -98,7 +94,6 @@ function approximateentry(
 
         # Break if the cov is below the defined threshold
         Φ != 1 && cov < limit && break
-
     end
 
     return Φ, cov
