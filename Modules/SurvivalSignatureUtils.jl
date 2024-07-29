@@ -31,12 +31,14 @@ function _print(dict::Dict)
     end
 end
 
-function header()
-    open("Modules/header.txt", "r") do file
-        # Read the entire contents of the file
-        contents = read(file, String)
-        # Print the contents to the console
-        println(contents)
+function print_structure(structure)
+    # Iterate over the fields and print their names and values
+
+    fields = fieldnames(typeof(structure))
+
+    for field in fields
+        value = getfield(structure, field)
+        println("$field: $value")
     end
 end
 

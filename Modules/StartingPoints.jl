@@ -18,18 +18,7 @@ export generateStartingPoints
 
 # ============================== METHODS =======================================
 
-function generateStartingPoints(method::String, state_vectors, types)
-    method = lowercase(method)
-    mode = if method == "grid-aligned"
-        GridStart()
-    else
-        error("Unrecognized Method: $method")
-    end
-
-    return generateStartingPoints(mode, state_vectors, types)
-end
-
-function generateStartingPoints(method::GridStart, state_vectors, types)
+function generateStartingPoints(method::GridStart, state_vectors::Matrix, types::Dict)
     # grid startng points
     lb = minimum(state_vectors; dims=2)
     ub = maximum(state_vectors; dims=2)
@@ -48,7 +37,7 @@ function generateStartingPoints(method::GridStart, state_vectors, types)
     # in case two have the same nearest neighbor
     # finds nearest neighbors to the grid aligned starting points - use the C values instead.
 
-    return Points(state_vectors[:, idx], idx, nothing, nothing), method
+    return Points(state_vectors[:, idx], idx, nothing, nothing)
 end
 # ==============================================================================
 

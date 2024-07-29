@@ -37,11 +37,11 @@ end
 function evaluateSurrogate(
     state_vector::Vector,
     weights::Array,
-    shape_parameter::Union{Number,Array},
-    centers::Array,
+    shape_parameter::Float64,
+    centers::Matrix,
     method::Methods,
 )::Float64
-    basis, _ = BasisFunction.basis(
+    basis = BasisFunction.basis(
         method.basis_function_method, shape_parameter, state_vector, centers
     )
 

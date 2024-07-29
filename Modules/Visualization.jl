@@ -8,7 +8,10 @@ using Plots
 
 # ==============================================================================
 
-using ..Structures: System, Simulation, Methods, StringMethods
+using ..Structures: System, Simulation, Methods
+
+using ..Structures: SimulationType, MonteCarloSimulation, IntervalPredictorSimulation
+using ..Structures: CentersMethod, GridCenters
 
 # ==============================================================================
 
@@ -16,53 +19,35 @@ export printDetails, plotError
 
 # ============================= TEXT ===========================================
 
-function removeDashAndCapitalize(str::String)
-    return join([titlecase(word) for word in split(str, "-")], " ")
-end
-
 # needs to be completly rewritten for refactorization
 # make multiple for each simulation type
-function printDetails(sys::System, sim::Simulation, method::StringMethods)
+function printDetails(sys::System, sim::Simulation, method::Methods)
     println("==================================================")
-    println("   Mode: $(removeDashAndCapitalize(method.simulation_method,))")
+    println("   Mode: $(nameof(typeof(method.simulation_method)))")
     println("--------------------------------------------------")
     println("   Parameters")
     println("..................................................")
     println("\tSamples: $(sim.samples)")
     println("\tVariation Tolerance: $(sim.variation_tolerance)")
-    if method.simulation_method == "monte-carlo"
-        nothing
-    else
-        println("\tWeight Change Tolerance: $(sim.weight_change_tolerance)")
-        if method.simulation_method == "interval-predictor"
-            println("\tConfidence Interval: $(sim.confidence_interval)")
-        end
-    end
+
     println("--------------------------------------------------")
 
-    if method.simulation_method == "monte-carlo"
+    if typeof(method.simulation_method) == MonteCarloSimulation()
         nothing # monte-carlo doesnt use these methods
     else
         println("   Methods:")
         println("..................................................")
-        println(
-            "\tShape Parameter: $(removeDashAndCapitalize(method.shape_parameter_method))"
-        )
+        println("\tShape Parameter: $(nameof(typeof(method.shape_parameter_method)))")
 
-        println(
-            "\tBasis Function: $(removeDashAndCapitalize(method.basis_function_method))"
-        )
+        println("\tBasis Function: $(nameof(typeof(method.basis_function_method)))")
 
-        if method.basis_function_method == "matern"
-            println("\t\tSmoothness Factor: $(method.smoothness_factor)")
+        println("\tStarting Points: $(nameof(typeof(method.starting_points_method)))")
+        println("\tCenter Points: $(nameof(typeof(method.centers_method)))")
+        if typeof(method.centers_method) == GridCenters()
+            println("\t\tCenters Interval: $(method.centers_method.confidence_interval)")
         end
 
-        println(
-            "\tStarting Points: $(removeDashAndCapitalize(method.starting_points_method))"
-        )
-        println("\tCenter Points: $(removeDashAndCapitalize(method.centers_method))")
-
-        println("\tWeight Change: $(removeDashAndCapitalize(method.weight_change_method))")
+        println("\tWeight Change: $(nameof(typeof(method.weight_change_method)))")
         println("==================================================")
         println("")
     end

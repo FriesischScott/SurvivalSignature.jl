@@ -7,7 +7,16 @@ include("Modules/Import.jl")
 using .Import
 
 using ..SurvivalSignatureUtils
-using ..Structures: System, Simulation, Model, Methods, StringMethods
+
+using ..Structures: System, Simulation, Model, Methods
+using ..Structures: SystemMethod, GridSystem
+using ..Structures: SimulationType, MonteCarloSimulation, IntervalPredictorSimulation
+using ..Structures: BasisFunctionMethod, Gaussian
+using ..Structures: ShapeParameterMethod, Hardy, Franke, Kuo, Rippa
+using ..Structures: CentersMethod, GridCenters
+using ..Structures: StartingMethod, GridStart
+using ..Structures: ErrorType, RMSE, RAE, NORM, NRMSE
+
 using ..StructureCompilation
 using ..Error: calculateError
 using ..Systems
@@ -15,59 +24,59 @@ using ..Visualization: plotError
 
 function main()
     # ================================ INPUTS ==================================
-
-    system_type::String = "grid"                 # ["grid"]
     percolation::Bool = true
+    verbose::Bool = true        # used to turn on and off print statements during 'simulate'
 
-    # currently issues when n and m are greater than 11.  - using behrensdorf
-    # also an error if n and m are too small (less than 7 each)
-    n::Int = 15
-    m::Int = 15
+    # [ GridSystem() ]
+    system_type::SystemMethod = GridSystem((15, 15))
 
     # Simulation Parameters
     samples::Union{Int,Vector{Int}} = [1, 10, 100, 1000]
     covtol::Float64 = 1e-3                       # coeficient of varriation tolerance
     wtol::Float64 = 1e-3                         # weight change tolerance
-    ci::Vector{Int} = [15, 15]          # confidence interval 
 
-    # Methods
-    # ["monte-carlo", "radial-basis-function", "interval-predictor"]
-    simulation_method::Union{String,Vector{String}} = "interval-predictor"
-    starting_points_method::Union{String,Vector{String}} = "grid-aligned"   # ["grid-aligned"]
-    centers_method::Union{String,Vector{String}} = "grid-aligned"           # ["grid-aligned"]
-    weight_change_method::Union{String,Vector{String}} = "norm"             # ["norm"]
-    # only 'hardy' and 'rippa' seems to function correctly (i.e. result in reasonable error)
-    #["hardy", "franke", "kuo", "rippa", "behrensdorf"]
-    shape_parameter_method::Union{String,Vector{String}} = ["hardy", "behrensdorf"]
-    basis_function_method::Union{String,Vector{String}} = "gaussian"       #["gaussian", "matern", "behrensdorf", "mq"]
-    smoothness_factor::Int = 3                                             # only requred for matern [1, 2, 3]
-    #                                                                     # and mq [1, 2]
+    ci::Vector{Int} = [15, 15]               # centers interval - dims must match 
+    #                                            # number of types
+
+    # METHODS
+    # -------------------------------------------------------------------------
+    # [MonteCarloSimulation(), IntervalPredictorSimulation()]
+    simulation_method::SimulationType = IntervalPredictorSimulation()
+    # [ GridStart() ]
+    starting_points_method::StartingMethod = GridStart()
+    # [ GridCenters() ]
+    centers_method::CentersMethod = GridCenters(ci)
+    # [ Norm() ]
+    weight_change_method::ErrorType = NORM()
+    # [ Hardy(), Franke(), Kuo(), Rippa(), BehrensdorfShape()] # can be a Vector
+    shape_parameter_method::ShapeParameterMethod = Hardy()
+    # [ Gaussian() ] 
+    basis_function_method::BasisFunctionMethod = Gaussian()
 
     # Error
-    error_type::Union{Vector{String},String} = ["rmse", "rae"]
+    error_type::Union{Vector{ErrorType},ErrorType} = [RMSE(), RAE()]
 
     # ======================== STRUCT REFINEMENT ===============================
 
-    sys::System = Systems.generateSystem(system_type, n, m; percolation_bool=percolation)
+    sys::System = Systems.generateSystem(system_type; percolation_bool=percolation)
 
     sims::Union{Vector{Simulation},Simulation} = StructureCompilation.compileSimulation(
-        samples, covtol, wtol, ci
+        samples, covtol, wtol
     )
 
-    str_methods::Union{Vector{StringMethods},StringMethods} = StructureCompilation.compileMethods(
+    methods::Union{Vector{Methods},Methods} = StructureCompilation.compileMethods(
         simulation_method,
         starting_points_method,
         centers_method,
         weight_change_method,
         shape_parameter_method,
         basis_function_method,
-        smoothness_factor,
     )
 
     # =============================== SIMULATE =================================
 
     signatures::Union{Vector{Model},Model} = Simulate.simulate(
-        simulation_method, sys, sims, str_methods
+        methods, sys, sims; verbose=verbose
     )
 
     # ============================= "TRUE SOLUTION" ============================
@@ -93,7 +102,9 @@ function main()
     #display(plt)
 
     println("Errors Calculated.")
-    return println("")
+    println("")
+
+    return nothing
 end
 
 # =============================== RUN ==========================================

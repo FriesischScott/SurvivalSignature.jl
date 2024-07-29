@@ -4,8 +4,9 @@ module Simulate
 # ==============================================================================
 
 using ..SurvivalSignatureUtils
-using ..Structures: System, Simulation, StringMethods, Methods, Points, Model
-using ..Structures: MonteCarloSimulation, RadialBasisSimulation, IntervalPredictorSimulation
+using ..Structures: System, Simulation, Methods, Points, Model
+using ..Structures: SimulationType, MonteCarloSimulation, IntervalPredictorSimulation
+using ..Structures: MonteCarloModel
 using ..Evaluation
 using ..StartingPoints
 using ..Centers
@@ -24,20 +25,19 @@ export simulate
 # ==============================================================================
 
 function simulate(
-    method::String,
-    sys::System,
-    sims::Vector{Simulation},
-    str_methods::Vector{StringMethods},
+    methods::Vector{Methods}, sys::System, sims::Vector{Simulation}; verbose::Bool=false
 )::Vector{Model}
 
     # Initialize the signatures array
-    nsignatures = length(str_methods) * length(sims)
+    nsignatures = length(method) * length(sims)
     signatures = Vector{Model}(undef, nsignatures)
 
     i = 1
-    for str_method in str_methods
+    for method in methods
         for sim in sims
-            signatures[i] = simulate(method, sys, sim, str_method)
+            signatures[i] = simulate(
+                method.simulation_method, sys, sim, method; verbose=verbose
+            )
             i += 1
         end
     end
@@ -46,73 +46,27 @@ function simulate(
 end
 
 function simulate(
-    methods::Vector{String},
-    sys::System,
-    sims::Vector{Simulation},
-    str_methods::Vector{StringMethods},
+    methods::Vector{Methods}, sys::System, sim::Simulation; verbose::Bool=false
 )::Vector{Model}
 
     # Length check
     len = length(methods)
-    if length(str_methods) != len
-        error("Simulation Parameters MUST be equal length.")
-    end
 
-    # Initialize the signatures array
-    nsignatures = len * length(sims)
-    signatures = Vector{Model}(undef, nsignatures)
-
-    i = 1
-    for (method, str_method) in zip(methods, str_methods)
-        for sim in sims
-            signatures[i] = simulate(method, sys, sim, str_method)
-            i += 1
-        end
-    end
-
-    return signatures
-end
-
-function simulate(
-    methods::Vector{String},
-    sys::System,
-    sim::Simulation,
-    str_methods::Vector{StringMethods},
-)::Vector{Model}
-
-    # Length check
-    len = length(methods)
-    if length(str_methods) != len
-        error("Simulation Parameters MUST be equal length.")
-    end
-
-    # Initialize the signatures array
+    #Initialize the signatures array
     signatures = Vector{Model}(undef, len)
 
     # Iterate over the elements of all vectors simultaneously
-    for (i, (method, str_method)) in enumerate(zip(methods, str_methods))
-        signatures[i] = simulate(method, sys, sim, str_method)
+    for (i, method) in enumerate(methods)
+        signatures[i] = simulate(
+            method.simulation_method, sys, sim, method; verbose=verbose
+        )
     end
 
     return signatures
 end
 
 function simulate(
-    method::String, sys::System, sim::Simulation, str_methods::Vector{StringMethods}
-)::Vector{Model}
-    # Initialize the signatures array
-    signatures = Vector{Model}(undef, length(str_methods))
-
-    # Iterate over the elements of all vectors simultaneously
-    for (i, str_method) in enumerate(str_methods)
-        signatures[i] = simulate(method, sys, sim, str_method)
-    end
-
-    return signatures
-end
-
-function simulate(
-    method::String, sys::System, sims::Vector{Simulation}, str_method::StringMethods
+    method::Methods, sys::System, sims::Vector{Simulation}; verbose::Bool=false
 )::Vector{Model}
 
     # Initialize the signatures array
@@ -120,37 +74,28 @@ function simulate(
 
     # Iterate over the elements of all vectors simultaneously
     for (i, sim) in enumerate(sims)
-        signatures[i] = simulate(method, sys, sim, str_method)
+        signatures[i] = simulate(
+            method.simulation_method, sys, sim, method; verbose=verbose
+        )
     end
 
     return signatures
 end
 
-function simulate(
-    method::String, sys::System, sim::Simulation, str_method::StringMethods
-)::Model
-    # if the Method is given as a String - it is converted to the appropriate struct
-    method = lowercase(method)
-
-    struct_method = if method == "monte-carlo"
-        MonteCarloSimulation()
-    elseif method == "radial-basis-function"
-        RadialBasisSimulation()
-    elseif method == "interval-predictor"
-        IntervalPredictorSimulation()
-    else
-        error("Unspecified Method: $method")
-    end
-
-    return simulate(struct_method, sys, sim, str_method)
+function simulate(method::Methods, sys::System, sim::Simulation; verbose::Bool=false)::Model
+    return simulate(method.simulation_method, sys, sim, method; verbose=verbose)
 end
 
 function simulate(
-    method::MonteCarloSimulation, sys::System, sim::Simulation, str_method::StringMethods
+    method::MonteCarloSimulation,
+    sys::System,
+    sim::Simulation,
+    methods::Methods;
+    verbose::Bool=false,
 )::Model
-    SurvivalSignatureUtils.header()
-    printDetails(sys, sim, str_method)
-
+    if verbose
+        printDetails(sys, sim, methods)
+    end
     state_vectors, percolated_state_vectors, sim.threshold = Evaluation.generateStateVectors(
         sys
     )
@@ -163,18 +108,19 @@ function simulate(
     )
 
     # ==========================================================================
-
-    println("Calculating Survival Signature Entires...")
-
+    if verbose
+        println("Calculating Survival Signature Entires...")
+    end
     Phi.solution, Phi.confidence = Evaluation.computeSurvivalSignatureEntry(
         sys, sim, Phi.coordinates
     )
-    println("Survival Signature Calculated\n")
-
+    if verbose
+        println("Survival Signature Calculated\n")
+    end
     # ==========================================================================
 
     # clean-up unnessesary method definitions
-    struct_method = Methods(method, nothing, nothing, nothing, nothing, nothing)
+    methods = Methods(method, nothing, nothing, nothing, nothing, nothing)
 
     Phi = expandPhi!(Phi, state_vectors)        # resize Phi to full (non-percolated) version
     Phi = reshapePhi!(Phi)                      # reshape Phi to retangular arrays
@@ -182,21 +128,12 @@ function simulate(
     # might make more sense to start with this size
     # but many changes would be necessary   
 
-    signature = Model(Phi, nothing, sys, sim, struct_method, str_method, nothing)
+    signature = Model(Phi, MonteCarloModel, sys, sim, methods, nothing)
 
     # ==========================================================================
-
-    println("Finished Successfully.\n")
-
-    return signature
-end
-
-function simulate(
-    method::RadialBasisSimulation, sys::System, sim::Simulation, str_method::StringMethods
-)::Model
-    SurvivalSignatureUtils.header()
-    printDetails(sys, sim, str_method)
-
+    if verbose
+        println("Finished Successfully.\n")
+    end
     return signature
 end
 
@@ -204,10 +141,12 @@ function simulate(
     method::IntervalPredictorSimulation,
     sys::System,
     sim::Simulation,
-    str_method::StringMethods,
+    methods::Methods;
+    verbose::Bool=false,
 )::Model
-    SurvivalSignatureUtils.header()
-    printDetails(sys, sim, str_method)
+    if verbose
+        printDetails(sys, sim, methods)
+    end
 
     # =============================== PERCOLATION ==============================
     state_vectors, percolated_state_vectors, sim.threshold = Evaluation.generateStateVectors(
@@ -222,77 +161,81 @@ function simulate(
     )
 
     # ============================= STARTING POINTS ============================
-    println("Generating Starting Points...")
-    starting_points, starting_points_method_struct = StartingPoints.generateStartingPoints(
-        str_method.starting_points_method, Phi.coordinates, sys.types
+    if verbose
+        println("Generating Starting Points...")
+    end
+    starting_points = StartingPoints.generateStartingPoints(
+        methods.starting_points_method, Phi.coordinates, sys.types
     )
 
     starting_points.solution, starting_points.confidence = Evaluation.computeSurvivalSignatureEntry(
         sys, sim, starting_points.coordinates
     )
-    println("Starting Points Generated.\n")
+    if verbose
+        println("Starting Points Generated.\n")
+    end
 
     # ================================ CENTERS =================================
-    println("Generating Centers...")
-    centers, centers_method_struct = Centers.generateCenters(
-        str_method.centers_method, state_vectors, sim.threshold, sim.confidence_interval
-    )
-    println("Centers Generated.\n")
+    if verbose
+        println("Generating Centers...")
+    end
+    centers = Centers.generateCenters(methods.centers_method, state_vectors, sim.threshold)
+    if verbose
+        println("Centers Generated.\n")
+    end
     # ============================== CONSTRAINTS ===============================
 
     constraints = monotonicity_constraints(centers)
 
     # ============================ SHAPE PARAMETER =============================
-    println("Compute Shape Parameters...")
-    shape_parameter_struct = ShapeParameter.selectShapeParameterMethod(
-        str_method.shape_parameter_method,
-        Phi.coordinates,
-        centers,
-        starting_points,
-        sim.confidence_interval,
+    if verbose
+        println("Compute Shape Parameters...")
+    end
+    shape_parameter = ShapeParameter.computeShapeParameter(
+        methods.shape_parameter_method, Phi.coordinates, starting_points, centers
     )
-
-    shape_parameter = ShapeParameter.computeShapeParameter(shape_parameter_struct)
-    println("\t$(str_method.shape_parameter_method): $shape_parameter")
-    println("Shape Parameter Computed.\n")
-
+    if verbose
+        println("Shape Parameter Computed.\n")
+    end
     # ============================ BASIC FUNCTION ==============================
-    println("Initializing Basis Function...")
-    starting_basis, basis_function_struct = BasisFunction.basis(
-        str_method, shape_parameter, starting_points.coordinates, centers
+    if verbose
+        println("Initializing Basis Function...")
+    end
+    starting_basis = BasisFunction.basis(
+        methods.basis_function_method, shape_parameter, starting_points.coordinates, centers
     )
-    println("Basis Function Initialized.\n")
+    if verbose
+        println("Basis Function Initialized.\n")
+    end
 
     # ============================ INITIAL WEIGHTS =============================
-    println("Initializing Weights...")
+    if verbose
+        println("Initializing Weights...")
+    end
     # convex method for minimizing the least-squared error of the weights
     initial_weights = lsqr(starting_basis, starting_points.solution, constraints)
-    println("Weights Initialized.\n")
+    if verbose
+        println("Weights Initialized.\n")
+    end
     # ========================== ADAPTIVE REFINEMENT ===========================
-
-    method = Methods(
-        method,
-        starting_points_method_struct,
-        centers_method_struct,
-        str_method.weight_change_method,
-        shape_parameter_struct,
-        basis_function_struct,
-    )
-
-    println("Beginning Adaptive Refinement...")
+    if verbose
+        println("Beginning Adaptive Refinement...")
+    end
     # Taylor-Expansion Based Adaptive Design - Mo et al.
     evaluated_points, weights, upper_bound, lower_bound = AdaptiveRefinement.adaptiveRefinement(
         Phi,
         starting_points,
         sys,
         sim,
-        method,
+        methods,
         initial_weights,
         centers,
         constraints,
         shape_parameter,
     )
-    println("Adaptive Refinement Completed\n")
+    if verbose
+        println("Adaptive Refinement Completed\n")
+    end
 
     # ========================== INTERVAL PREDICTOR ============================
     ipm = IntervalPredictorModel.intervalPredictor(
@@ -302,7 +245,7 @@ function simulate(
         centers,
         shape_parameter,
         weights,
-        method,
+        methods,
     )
 
     Phi = mergePoints!(Phi, evaluated_points)   # fill evaluated values into Phi
@@ -312,15 +255,20 @@ function simulate(
     # might make more sense to start with this size
     # but many changes would be necessary   
 
-    signature = Model(Phi, ipm, sys, sim, method, str_method, nothing) # struct
+    signature = Model(Phi, ipm, sys, sim, methods, nothing) # struct
 
     # ====================== EVALUATE REMAINING POINTS =========================
-    println("Evaluating Remaining Points...")
+    if verbose
+        println("Evaluating Remaining Points...")
+    end
     signature = Evaluation.evaluate(signature)
-    println("Remaining Points Evaluated.\n")
+    if verbose
+        println("Remaining Points Evaluated.\n")
+    end
     # ==========================================================================
-
-    println("Finished Successfully.\n")
+    if verbose
+        println("Finished Successfully.\n")
+    end
 
     return signature
 end

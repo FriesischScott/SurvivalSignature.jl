@@ -17,14 +17,14 @@ export intervalPredictor
 # no idea what is happening here at the momment
 function intervalPredictor(
     evaluated_points::Points,
-    upper_bound::AbstractArray,
-    lower_bound::AbstractArray,
-    centers::AbstractArray,
-    shape_parameter::Union{Number,AbstractArray},
-    weights::AbstractArray,
+    upper_bound::Array,
+    lower_bound::Array,
+    centers::Array,
+    shape_parameter::Float64,
+    weights::Array,
     method::Methods,
 )
-    basis, _ = BasisFunction.basis(
+    basis = BasisFunction.basis(
         method.basis_function_method, shape_parameter, evaluated_points.coordinates, centers
     )
 

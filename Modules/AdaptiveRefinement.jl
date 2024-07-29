@@ -29,14 +29,14 @@ function adaptiveRefinement(
     evaluated_points::Points,
     sys::System,
     sim::Simulation,
-    method::Methods,
-    weights::AbstractArray,
-    centers::AbstractArray,
-    constraints::AbstractArray,
-    shape_parameter::Union{Number,AbstractArray},
+    methods::Methods,
+    weights::Array,
+    centers::Array,
+    constraints::Array,
+    shape_parameter::Float64,
 )
-    total_basis, _ = BasisFunction.basis(
-        method.basis_function_method, shape_parameter, total_points.coordinates, centers
+    total_basis = BasisFunction.basis(
+        methods.basis_function_method, shape_parameter, total_points.coordinates, centers
     )
 
     x = evaluated_points # evaluated points
@@ -49,13 +49,14 @@ function adaptiveRefinement(
     stop = 0
     while stop < 2
         function s(a::Points)
-            return (BasisFunction.basis(method.basis_function_method, shape_parameter, a.coordinates, centers)[1] * weights)[1]
+            return (BasisFunction.basis(methods.basis_function_method, shape_parameter, a.coordinates, centers) * weights)[1]
         end
 
         # exploration score
         idx, D = explorationScore(x, candidates)
 
         # exploitation score
+
         R = exploitationScore(total_basis, x, s, weights, candidates, cand_idx, idx)
 
         # weight function
@@ -82,14 +83,14 @@ function adaptiveRefinement(
         old_weights = weights
 
         # recompute the basis Function
-        basis, _ = BasisFunction.basis(
-            method.basis_function_method, shape_parameter, x.coordinates, centers
+        basis = BasisFunction.basis(
+            methods.basis_function_method, shape_parameter, x.coordinates, centers
         )
 
         # update weights
         weights = lsqr(basis, x.solution, constraints)
 
-        if Error.calculateError(method.weight_change_method, weights, old_weights) <
+        if Error.calculateError(methods.weight_change_method, weights, old_weights) <
             sim.weight_change_tolerance
             stop += 1
         else
@@ -98,7 +99,7 @@ function adaptiveRefinement(
 
         stop != 1 && ProgressMeter.update!(
             prog,
-            Error.calculateError(method.weight_change_method, weights, old_weights),
+            Error.calculateError(methods.weight_change_method, weights, old_weights),
         )
     end
 
@@ -111,20 +112,20 @@ function adaptiveRefinement(
     return x, weights, upper_bound, lower_bound
 end
 
-function explorationScore(x::Points, candidates::AbstractArray)
+function explorationScore(x::Points, candidates::Matrix)
     tree = NearestNeighbors.KDTree(x.coordinates)
     idx, dist = NearestNeighbors.nn(tree, candidates)
     return idx, dist
 end
 
 function exploitationScore(
-    total_basis::AbstractArray,
+    total_basis::Matrix,
     X::Points,
     func::Function,
-    weights::AbstractArray,
-    candidates::AbstractArray,
+    weights::Array,
+    candidates::Array,
     cand_idx::InvertedIndex,
-    nearest_neighbor_idx::AbstractArray,
+    nearest_neighbor_idx::Array,
 )
     # Combine coordinates and solutions for local function s(a)
     combined = [(X.coordinates[:, i], X.solution[i]) for i in 1:size(X.coordinates, 2)]
@@ -156,7 +157,7 @@ function exploitationScore(
     return @views abs.(total_basis[cand_idx, :] * weights .- t)
 end
 
-function weightFunction(nearest_neighbor_distance::AbstractArray, l_max::Number)
+function weightFunction(nearest_neighbor_distance::Array, l_max::Number)
     return (1 .- nearest_neighbor_distance ./ l_max)
 end
 
@@ -168,9 +169,7 @@ function maximumLength(Ω::Points)
 end
 
 function hybridScore(
-    exploration_score::AbstractArray,
-    exploitation_score::AbstractArray,
-    weight_function::AbstractArray,
+    exploration_score::Array, exploitation_score::Array, weight_function::Array
 )
 
     # normalization
@@ -180,7 +179,7 @@ function hybridScore(
     return exploration_score + weight_function .* exploitation_score
 end
 
-function optimalPoint(Ω::Points, scores::AbstractArray, candidates::AbstractArray)
+function optimalPoint(Ω::Points, scores::Array, candidates::Array)
     _, idx = findmax(scores)
     optimal_candidate = candidates[:, idx]  # optimal candidate (state_vector)
 
@@ -201,7 +200,7 @@ function remainingCandidates(Ω::Points, x::Points)
     return candidates, cand_idx
 end
 
-function remainingCandidates(candidates::AbstractArray, remove_points::AbstractArray)
+function remainingCandidates(candidates::Array, remove_points::Array)
     candidates = candidates[.!in.(1:size(candidates, 1), Ref(remove_points)), :]
     return candidates, cand_idx
 end

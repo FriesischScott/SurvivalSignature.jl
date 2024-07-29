@@ -10,6 +10,7 @@ using Statistics
 
 using ..SurvivalSignatureUtils
 using ..Structures: Model
+using ..Structures: ErrorType, RMSE, RAE, NORM, NRMSE
 using ..BasisFunction
 
 # ==============================================================================
@@ -17,7 +18,7 @@ export calculateError
 # ==============================================================================
 
 function calculateError(
-    methods::Vector{String}, models::Vector{Model}, compare::Union{Model,AbstractArray}
+    methods::Vector{ErrorType}, models::Vector{Model}, compare::Union{Model,Array}
 )
     errors = Vector{Dict}(undef, length(models))
 
@@ -32,17 +33,21 @@ function calculateError(
 end
 
 function calculateError(
-    methods::Vector{String}, model::Model, compare::Union{Model,AbstractArray}
+    methods::Vector{ErrorType}, model::Model, compare::Union{Model,Array}
 )
     errors = Dict{String,Union{String,Float64}}()
 
     compare_solution = isa(compare, Model) ? compare.Phi.solution : compare
 
     for method in methods
-        errors[method] = calculateError(method, model.Phi.solution, compare_solution)
+        errors[string(nameof(typeof(method)))] = calculateError(
+            method, model.Phi.solution, compare_solution
+        )
     end
 
-    println("shape_parameter: $(model.str_method.shape_parameter_method)")
+    println(
+        "shape_parameter: $(string(nameof(typeof((model.method.shape_parameter_method)))))"
+    )
     println("samples: $(model.sim.samples)")
     SurvivalSignatureUtils._print(errors)
 
@@ -50,14 +55,16 @@ function calculateError(
 end
 
 function calculateError(
-    methods::Vector{String}, arr1::AbstractArray, compare::Union{Model,AbstractArray}
+    methods::Vector{ErrorType}, arr1::Array, compare::Union{Model,Array}
 )
     errors = Dict{String,Union{String,Float64}}()
 
     compare_solution = isa(compare, Model) ? compare.Phi.solution : compare
 
     for method in methods
-        errors[method] = calculateError(method, arr1, compare_solution)
+        errors[string(nameof(typeof(method)))] = calculateError(
+            method, arr1, compare_solution
+        )
     end
 
     errors["name"] = "unknown"
@@ -67,27 +74,9 @@ function calculateError(
     return errors
 end
 
-function calculateError(method::String, arr1::AbstractArray, arr2::AbstractArray)
-    @assert prod(size(arr1)) == prod(size(arr2))
-
-    func = selectErrorMethod(method)
-
-    return func(arr1, arr2)
-end
-
-function selectErrorMethod(method::String)
-    methods_dict = Dict("rmse" => rmse, "rae" => rae, "norm" => _norm, "nrsme" => nrmse)
-
-    if haskey(methods_dict, lowercase(method))
-        return methods_dict[lowercase(method)]
-    else
-        error("Unsupported Method: $method")
-    end
-end
-
 # ==============================================================================
 
-function rmse(arr1::AbstractArray, arr2::AbstractArray)
+function calculateError(method::RMSE, arr1::Array, arr2::Array)
     # root mean sqauared error:
 
     # rmse = sqrt( Σ (y_i - ŷ_i)^2 / N )s
@@ -99,7 +88,7 @@ function rmse(arr1::AbstractArray, arr2::AbstractArray)
     return sqrt(sum((arr1 .- arr2) .^ 2) / prod(size(arr1)))
 end
 
-function rae(true_values::AbstractArray, predicted_values::AbstractArray)
+function calculateError(method::RAE, true_values::Array, predicted_values::Array)
     # relative absolute error:
 
     # rae = Σ |y_i - ŷ_i| / Σ |y_i - ȳ|
@@ -108,7 +97,7 @@ function rae(true_values::AbstractArray, predicted_values::AbstractArray)
     #   ŷ_i = predicted_values
     #   ȳ = mean of true_values
 
-    function absoluteSum(arr1::AbstractArray, arr2::Union{Number,AbstractArray})
+    function absoluteSum(arr1::Array, arr2::Union{Number,Array})
         return sum(abs.(arr1 .- arr2))
     end
 
@@ -116,12 +105,12 @@ function rae(true_values::AbstractArray, predicted_values::AbstractArray)
            absoluteSum(true_values, Statistics.mean(true_values))
 end
 
-function _norm(weights::AbstractArray, old_weights::AbstractArray)
+function calculateError(method::NORM, weights::Array, old_weights::Array)
     # _norm to avoid overlap with third-party functions
     return LinearAlgebra.norm(weights - old_weights)
 end
 
-function nrmse()
+function calculateError(method::NRMSE)
     # to be filled out using the stopping critera from Mo et al.
     return nothing
 end
