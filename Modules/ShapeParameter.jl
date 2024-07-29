@@ -104,7 +104,7 @@ function largest_distance(points::Array)
     return maximum(D)
 end
 
-function nsqrt(x::Float64, n::Int)
+function nsqrt(x::Number, n::Int)
     return x^(1 / n)
 end
 
@@ -116,7 +116,7 @@ function costFunction(
 )
     N = length(solutions)
 
-    A, _ = BasisFunction.basis(Gaussian(), shape_parameter, coordinates, centers)
+    A = BasisFunction.basis(Gaussian(), shape_parameter, coordinates, centers)
 
     inv_A = pinv(A)  # Compute the pseudoinverse of the RBF matrix
 

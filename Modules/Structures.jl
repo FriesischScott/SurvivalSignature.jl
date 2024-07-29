@@ -124,11 +124,11 @@ struct GridStart <: StartingMethod end
 # ==============================================================================
 
 struct Methods
-    simulation_method::SimulationType
-    starting_points_method::StartingMethod
-    centers_method::CentersMethod
+    simulation_method::Union{SimulationType,Nothing}
+    starting_points_method::Union{StartingMethod,Nothing}
+    centers_method::Union{CentersMethod,Nothing}
     weight_change_method::Union{ErrorType,Nothing}
-    shape_parameter_method::ShapeParameterMethod
+    shape_parameter_method::Union{ShapeParameterMethod,Nothing}
     basis_function_method::Union{Gaussian,Nothing}
 end
 

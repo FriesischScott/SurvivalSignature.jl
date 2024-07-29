@@ -26,19 +26,16 @@ export simulate
 
 function simulate(
     methods::Vector{Methods}, sys::System, sims::Vector{Simulation}; verbose::Bool=false
-)::Vector{Model}
+)::Matrix{Model}
 
     # Initialize the signatures array
-    nsignatures = length(method) * length(sims)
-    signatures = Vector{Model}(undef, nsignatures)
+    signatures = Matrix{Model}(undef, (length(methods), length(sims)))
 
-    i = 1
-    for method in methods
-        for sim in sims
-            signatures[i] = simulate(
+    for (i, method) in enumerate(methods)   # columns
+        for (j, sim) in enumerate(sims) #   # rows
+            signatures[i, j] = simulate(
                 method.simulation_method, sys, sim, method; verbose=verbose
             )
-            i += 1
         end
     end
 
@@ -128,7 +125,7 @@ function simulate(
     # might make more sense to start with this size
     # but many changes would be necessary   
 
-    signature = Model(Phi, MonteCarloModel, sys, sim, methods, nothing)
+    signature = Model(Phi, MonteCarloModel(), sys, sim, methods, nothing)
 
     # ==========================================================================
     if verbose

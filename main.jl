@@ -28,10 +28,10 @@ function main()
     verbose::Bool = true        # used to turn on and off print statements during 'simulate'
 
     # [ GridSystem() ]
-    system_type::SystemMethod = GridSystem((15, 15))
+    system_type::SystemMethod = GridSystem((6, 6))
 
     # Simulation Parameters
-    samples::Union{Int,Vector{Int}} = [1, 10, 100, 1000]
+    samples::Union{Int,Vector{Int}} = [1, 10]
     covtol::Float64 = 1e-3                       # coeficient of varriation tolerance
     wtol::Float64 = 1e-3                         # weight change tolerance
 
@@ -39,6 +39,7 @@ function main()
     #                                            # number of types
 
     # METHODS
+    # -------------------------------------------------------------------------
     # -------------------------------------------------------------------------
     # [MonteCarloSimulation(), IntervalPredictorSimulation()]
     simulation_method::SimulationType = IntervalPredictorSimulation()
@@ -48,8 +49,10 @@ function main()
     centers_method::CentersMethod = GridCenters(ci)
     # [ Norm() ]
     weight_change_method::ErrorType = NORM()
-    # [ Hardy(), Franke(), Kuo(), Rippa(), BehrensdorfShape()] # can be a Vector
-    shape_parameter_method::ShapeParameterMethod = Hardy()
+    # [ Hardy(), Franke(), Kuo(), Rippa()] # can be a Vector
+    shape_parameter_method::Union{Vector{ShapeParameterMethod},ShapeParameterMethod} = [
+        Hardy(), Rippa()
+    ]
     # [ Gaussian() ] 
     basis_function_method::BasisFunctionMethod = Gaussian()
 
@@ -73,17 +76,19 @@ function main()
         basis_function_method,
     )
 
+    sim_mc = Structures.Simulation(50, covtol, wtol)
+    method_mc = Structures.Methods(
+        MonteCarloSimulation(), nothing, nothing, nothing, nothing, nothing
+    )
+    signature_mc = Simulate.simulate(method_mc, sys, sim_mc; verbose=verbose)
+
     # =============================== SIMULATE =================================
 
-    signatures::Union{Vector{Model},Model} = Simulate.simulate(
+    signatures::Union{Matrix{Model},Vector{Model},Model} = Simulate.simulate(
         methods, sys, sims; verbose=verbose
     )
 
     # ============================= "TRUE SOLUTION" ============================
-
-    # sim_mc = Structures.Simulation(samples, covtol, wtol, ci, nothing) 
-    # str_method_mc = Structures.StringMethods("monte-carlo")
-    # signature_mc = Simulate.simulate("monte-carlo", sys, sim_mc, str_method_mc)
 
     #true values - apparently this outputs a Φ - which is the true value solutions
     @load "demo/data/grid-network-15x15-MC-10000.jld2"
@@ -93,7 +98,9 @@ function main()
     println("Calculating Error...")
     println("--------------------------------------------------------")
 
-    signatures, errors = Error.calculateError(error_type, signatures, Φ)
+    signatures, errors = Error.calculateError(
+        error_type, signatures, signature_mc.Phi.solution
+    )
 
     println("--------------------------------------------------------")
 
@@ -103,6 +110,11 @@ function main()
 
     println("Errors Calculated.")
     println("")
+
+    signature = signatures[1]
+    SurvivalSignatureUtils._print(signature.Phi.solution)
+
+    println(" ")
 
     return nothing
 end

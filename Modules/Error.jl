@@ -18,9 +18,9 @@ export calculateError
 # ==============================================================================
 
 function calculateError(
-    methods::Vector{ErrorType}, models::Vector{Model}, compare::Union{Model,Array}
+    methods::Vector{ErrorType}, models::Array{Model}, compare::Union{Model,Array}
 )
-    errors = Vector{Dict}(undef, length(models))
+    errors = Array{Dict{String,Union{String,Float64}}}(undef, size(models))
 
     for (i, model) in enumerate(models)
         _, error = Error.calculateError(methods, model, compare)
@@ -35,12 +35,12 @@ end
 function calculateError(
     methods::Vector{ErrorType}, model::Model, compare::Union{Model,Array}
 )
-    errors = Dict{String,Union{String,Float64}}()
+    error = Dict{String,Union{String,Float64}}()
 
     compare_solution = isa(compare, Model) ? compare.Phi.solution : compare
 
     for method in methods
-        errors[string(nameof(typeof(method)))] = calculateError(
+        error[string(nameof(typeof(method)))] = calculateError(
             method, model.Phi.solution, compare_solution
         )
     end
@@ -49,9 +49,9 @@ function calculateError(
         "shape_parameter: $(string(nameof(typeof((model.method.shape_parameter_method)))))"
     )
     println("samples: $(model.sim.samples)")
-    SurvivalSignatureUtils._print(errors)
+    SurvivalSignatureUtils._print(error)
 
-    return model, errors
+    return model, error
 end
 
 function calculateError(

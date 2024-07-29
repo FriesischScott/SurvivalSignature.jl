@@ -1,7 +1,5 @@
 module SurvivalSignatureUtils
 
-# ==============================================================================
-
 # Function to ensure input array is treated as a column array
 function ensure_column_array!(arr::Array)
     if size(arr, 1) > 1 && size(arr, 2) > 1
@@ -18,17 +16,99 @@ function ensure_row_array!(arr::Array)
     return arr
 end
 
-function _print(array::Array)
-    array = ensure_row_array!(array)
-    for row in eachrow(array)
-        println(round.(row; digits=1))
+# Define a function to print a matrix
+function _print(matrix::Matrix)
+    rows = [eachrow(matrix)...]
+    return _print(rows)
+end
+
+# Define a function to print an array of rows
+function _print(rows::Vector{<:AbstractVector})
+    # Determine the max number of lines for any dictionary in the rows
+    max_lines_per_dict = maximum([_max_lines(cell) for row in rows for cell in row])
+
+    # Calculate the width of each cell based on the widest content
+    num_cols = length(rows[1])
+    cell_widths = [maximum([_cell_width(row[col]) for row in rows]) for col in 1:num_cols]
+    overall_width = sum(cell_widths) + length(cell_widths) * 3 + 1
+
+    # Print the top border
+    println("+" * "-"^(overall_width - 2) * "+")
+
+    for row in rows
+        for i in 1:max_lines_per_dict
+            print("|")
+            for (j, cell) in enumerate(row)
+                print(" ")
+                _print(cell, i, cell_widths[j])
+                print(" |")
+            end
+            println()
+        end
+        # Print the row separator
+        println("+" * "-"^(overall_width - 2) * "+")
     end
+end
+
+# Define a helper function to count the number of lines in a dictionary
+function _max_lines(cell)
+    if cell isa Dict
+        return length(keys(cell))
+    else
+        return 1
+    end
+end
+
+# Define a helper function to calculate the width of a cell's content
+function _cell_width(cell)
+    if cell isa Dict
+        max_key_length = maximum(length(string(k)) for k in keys(cell))
+        max_val_length = maximum(length(_format_value(v)) for v in values(cell))
+        return max_key_length + max_val_length + 2 # for ": " between key and value
+    else
+        return length(_format_value(cell))
+    end
+end
+
+# Define a function to print a single cell, either value or dictionary entry
+function _print(cell, line::Int, width::Int)
+    if cell isa Dict
+        keys_vals = collect(cell)
+        if line <= length(keys_vals)
+            key, value = keys_vals[line]
+            entry = "$key: $(_format_value(value))"
+            print(entry * " "^(width - length(entry)))
+        else
+            print(" "^width)
+        end
+    else
+        content = _format_value(cell)
+        print(content * " "^(width - length(content)))
+    end
+end
+
+# Helper function to format different types of values
+function _format_value(value)
+    if value isa Float64
+        return string(round(value; digits=4))
+    else
+        return string(value)
+    end
+end
+
+# Overload _print for different types
+function _print(value::Union{String,Float64,Int})
+    return print(_format_value(value))
 end
 
 function _print(dict::Dict)
     for (key, value) in dict
-        println("$key: $value")
+        println("$key: $(_format_value(value))")
     end
+end
+
+function _print(value)
+    return print(value)
 end
 
 function print_structure(structure)
@@ -38,7 +118,7 @@ function print_structure(structure)
 
     for field in fields
         value = getfield(structure, field)
-        println("$field: $value")
+        print("$field: $value")
     end
 end
 
