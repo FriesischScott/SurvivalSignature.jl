@@ -7,18 +7,17 @@ using LinearAlgebra # needed for norm
 using Optim
 using Distances
 using IterTools
+using Plots
+using Surrogates
 
 # ==============================================================================
 
-#include("Structures.jl")
 using ..Structures: Points
-using ..Structures: Hardy, Franke, Kuo, Rippa
+using ..Structures: Hardy, Rippa, DirectAMLS, IndirectAMLS
 using ..Structures: Gaussian
 
-#include("SurvivalSignatureUtils.jl")
 using ..SurvivalSignatureUtils
 
-#include("BasisFunction.jl")
 using ..BasisFunction
 
 # ==============================================================================
@@ -28,7 +27,7 @@ export computeShapeParameter
 # ============================= METHODS ========================================
 function computeShapeParameter(
     method::Hardy, points::Array, starting_points::Points, centers::Array
-)
+)::Float64
 
     # knn(k=2) returns the 2 closest points, since the 1. is itself 
     _, d = NearestNeighbors.knn(NearestNeighbors.KDTree(points), points, 2)
@@ -38,39 +37,15 @@ function computeShapeParameter(
     return 1 / (0.815 * (d / size(points, 2)))
 end
 
-function computeShapeParameter(
-    method::Franke, points::Array, starting_points::Points, centers::Array
-)
-
-    # leads to really slow adaptive refinement (change values are very high)
-    points = SurvivalSignatureUtils.ensure_column_array!(points)
-
-    N::Int = length(points[:, 1])
-
-    # D represents the diameter of the smallest circle which encompasses
-    # all points, or the furthest distance between 2 points.
-    D = largest_distance(points)
-
-    return D / (sqrt(N) * 0.8)
-end
-
-function computeShapeParameter(
-    method::Kuo, points::Array, starting_points::Points, centers::Array
-)
-    # modified version of `franke()`
-    # also really show adaptive refinement (possible do to formula flip)
-    points = SurvivalSignatureUtils.ensure_column_array!(points)
-    N::Int = length(points[:, 1])
-
-    D = largest_distance(points)
-    return D / (nsqrt(N, 4) * 0.8)
-end
+# 
 
 function computeShapeParameter(
     method::Rippa, points::Array, starting_points::Points, centers::Array
-)
+)::Float64
     cost_function =
-        ϵ -> costFunction(starting_points.solution, starting_points.coordinates, centers, ϵ)
+        ϵ -> optimized_LOOCV(
+            starting_points.coordinates, starting_points.solution, centers, ϵ
+        )
     result = optimize(cost_function, 0.1, 10.0)
 
     ϵ_opt = Optim.minimizer(result)
@@ -79,58 +54,216 @@ function computeShapeParameter(
     return ϵ_opt
 end
 
-# function computeShapeParameter(method::BehrensdorfShape)
-#     lb = method.lower
-#     ub = method.upper
-#     ci = method.confidence_interval
+function computeShapeParameter(
+    method::DirectAMLS, points::Array, starting_points::Points, centers::Array
+)
+    cost_function =
+        ϵ -> directAMLS(
+            starting_points.coordinates,
+            starting_points.solution,
+            centers,
+            ϵ,
+            method.max_iterations,
+            method.tolerance,
+        )
+    result = optimize(cost_function, 0.1, 10.0)
 
-#     ranges = [range(l, u, c) for (l, u, c) in zip(lb, ub, ci)]
+    ϵ_opt = Optim.minimizer(result)
+    # f_val = Optim.minimum(result)
 
-#     return (getindex.(ranges, 2) .- getindex.(ranges, 1)) ./ 2
-# end
+    return ϵ_opt
+end
+
+function computeShapeParameter(
+    method::IndirectAMLS, points::Array, starting_points::Points, centers::Array
+)
+    cost_function =
+        ϵ -> indirectAMLS(
+            starting_points.coordinates,
+            starting_points.solution,
+            centers,
+            ϵ,
+            method.max_iterations,
+            method.tolerance,
+        )
+    result = optimize(cost_function, 0.1, 10.0)
+
+    ϵ_opt = Optim.minimizer(result)
+    # f_val = Optim.minimum(result)
+
+    return ϵ_opt
+end
 
 # ============================= UTILS ==========================================
 
-function distance_matrix(points::Array)
-    # Ensure points are in column format (rows as points)
-    if size(points, 1) < size(points, 2)
-        points = points'
-    end
-    return pairwise(Euclidean(), points; dims=2)
-end
-
-function largest_distance(points::Array)
-    D = distance_matrix(points)
-    return maximum(D)
-end
-
-function nsqrt(x::Number, n::Int)
-    return x^(1 / n)
-end
-
-function costFunction(
-    solutions::Union{Vector,Float64},    # true solutions of starting points
-    coordinates::Array,                   # starting points
+function optimized_LOOCV(   # doesnt currently work
+    coordinates::Array{Float64},
+    solutions::Vector{Float64},
     centers::Array,
     shape_parameter::Float64,
 )
     N = length(solutions)
 
     A = BasisFunction.basis(Gaussian(), shape_parameter, coordinates, centers)
+    invA = pinv(A)
 
-    inv_A = pinv(A)  # Compute the pseudoinverse of the RBF matrix
+    errors = (invA * solutions) / diag(invA)
 
-    errors = zero(solutions)
-    for i in 1:N
-        A_i = A[:, i]
-        inv_A_i = inv_A[i, :]  # Select the ith row of the pseudoinverse matrix
-        y_pred_i = solutions[i] - (dot(A_i, inv_A_i) / inv_A_i[i])
-        errors[i] = solutions[i] - y_pred_i
+    return norm(errors)^2 / N
+end
+
+function directAMLS(   # doesnt currently work
+    coordinates::Array{Float64},
+    solutions::Vector{Float64},
+    centers::Array,
+    shape_parameter::Float64,
+    max_iterations::Int,
+    tolerance::Float64,
+)
+
+    # the Direct AMLS method necessitates A be a square matrix, however this is 
+    # only the case if the number of centers matches the number of starting points.
+    A = squareMatrix(BasisFunction.basis(Gaussian(), shape_parameter, coordinates, centers))
+    I = Matrix(LinearAlgebra.I(size(A, 1)))
+
+    v_prev = solutions # initializing
+    M_prev = I
+    cost_prev = Inf
+    for n in 1:max_iterations
+        v = (I - A) * v_prev .+ solutions
+
+        # eigen dicomposition 
+        eig = LinearAlgebra.eigen(I - A)
+        Λ = eig.values
+        X = eig.vectors
+
+        M = Λ .* M_prev .+ I
+
+        # cost vector
+        e = v ./ diag(X * M * X')
+        cost = LinearAlgebra.norm(e)
+
+        # convergence
+        if (cost - cost_prev) < tolerance
+            return cost
+        end
+
+        cost_prev = cost
+        M_prev = M
+        v_prev = v
     end
 
-    return LinearAlgebra.norm(errors)^2 / N
+    return cost
 end
 
-# =============================================================================
+function squareMatrix(A::Matrix)::Matrix
+    # the purpose of this function is to make a square-matrix from a non-square matrix
+    if isSquare(A)
+        # if the matrix is already square, this is unnessesary
+        return A
+    else
+        return A * A'
+    end
+end
+
+function isSquare(matrix::Matrix)::Bool
+    return size(matrix, 1) == size(matrix, 2)
+end
+
+# continue reading Fasshauer and Zhang.
+# there is a better method for this - Algorithm 6
+function indirectAMLS(
+    coordinates::Array{Float64},
+    solutions::Vector{Float64},
+    centers::Array,
+    shape_parameter::Float64,
+    max_iterations::Int,
+    tolerance::Float64,
+)
+    N = length(solutions)
+
+    error_prev = zeros(N)
+    errors = zeros(N)
+
+    for k in 1:N
+        solution_k = solutions[k]
+        coordinate_k = coordinates[:, k]
+
+        Q = sum(
+            solutions[j] * BasisFunction.basis(
+                Gaussian(),
+                shape_parameter,
+                LinearAlgebra.norm(coordinate_k - coordinates[:, j]),
+            ) for j in 1:N if j != k
+        )
+
+        for n in 1:max_iterations
+            r = zeros(N)
+            for j in 1:N
+                r[j] = solutions[j] - Q
+            end
+
+            u = sum(
+                r[j] * BasisFunction.basis(
+                    Gaussian(),
+                    shape_parameter,
+                    LinearAlgebra.norm(coordinate_k - coordinates[:, j]),
+                ) for j in 1:N if j != k
+            )
+
+            Q += u
+
+            # error estimate
+            errors[k] = abs(solution_k - Q)
+        end
+
+        cost = LinearAlgebra.norm(errors)
+
+        if (cost - LinearAlgebra.norm(error_prev)) < tolerance
+            return cost
+        end
+        error_prev .= errors
+    end
+
+    return cost
+end
+
+# ==============================================================================
 
 end
+
+# this function is slower, and therefore depreciated. however it is kept for comparison
+# function computeShapeParameter(
+#     method::Rippa2, points::Array, starting_points::Points, centers::Array
+# )::Float64
+#     cost_function =
+#         ϵ -> LOOCV(
+#             starting_points.coordinates, starting_points.solution, centers, ϵ
+#         )
+#     result = optimize(cost_function, 0.1, 5.0)
+
+#     ϵ_opt = Optim.minimizer(result)
+#     # f_val = Optim.minimum(result)
+
+#     return ϵ_opt
+# end
+# function LOOCV(
+#     coordinates::Array{Float64},
+#     solutions::Vector{Float64},
+#     centers::Array,
+#     shape_parameter::Float64,
+# )
+#     N = length(solutions)
+
+#     A = BasisFunction.basis(Gaussian(), shape_parameter, coordinates, centers)
+#     invA = pinv(A)
+
+#     errors = zeros(N)
+#     for i in 1:N
+#         Ai = @view A[:, i]
+#         invAi = @view invA[i, :]
+#         y_pred = solutions[i] - (dot(Ai, invAi) / invAi[i])
+#         errors[i] = solutions[i] - y_pred
+#     end
+#     return norm(errors)^2 / N
+# end

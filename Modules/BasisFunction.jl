@@ -25,13 +25,21 @@ function basis(
         (x, c) in IterTools.product(eachcol(coordinates), eachcol(centers))
     ]
 
-    # gaussian basis function
-    Ψ = exp.(-shape_parameter^2 .* dist .^ 2)
+    Ψ = exp.(-dist .^ 2 ./ (2 * shape_parameter^2))
 
     # normalization - eps() avoid division by zero
-
     return Ψ ./ (sum(Ψ; dims=2) .+ eps())
 end
 
-# ==============================================================================
+function basis(method::Gaussian, shape_parameter::Float64, dist::Float64)
+    # used in indirect AMLS shape parameter method
+
+    Ψ = exp.(-dist .^ 2 ./ (2 * shape_parameter^2))
+
+    # normalization not necessary since Ψ is scalar
+    return Ψ
 end
+
+end
+
+# ==============================================================================

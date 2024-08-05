@@ -18,12 +18,15 @@ export calculateError
 # ==============================================================================
 
 function calculateError(
-    methods::Vector{ErrorType}, models::Array{Model}, compare::Union{Model,Array}
+    methods::Union{ErrorType,Vector{ErrorType}},
+    models::Array{Model},
+    compare::Union{Model,Array};
+    verbose::Bool=false,
 )
-    errors = Array{Dict{String,Union{String,Float64}}}(undef, size(models))
+    errors = Array{Dict{String,Float64}}(undef, size(models))
 
     for (i, model) in enumerate(models)
-        _, error = Error.calculateError(methods, model, compare)
+        _, error = Error.calculateError(methods, model, compare; verbose=verbose)
 
         errors[i] = error
         model.errors = error
@@ -33,11 +36,15 @@ function calculateError(
 end
 
 function calculateError(
-    methods::Vector{ErrorType}, model::Model, compare::Union{Model,Array}
+    methods::Union{ErrorType,Vector{ErrorType}},
+    model::Model,
+    compare::Union{Model,Array};
+    verbose::Bool=false,
 )
-    error = Dict{String,Union{String,Float64}}()
+    error = Dict{String,Float64}()
 
     compare_solution = isa(compare, Model) ? compare.Phi.solution : compare
+    methods = isa(methods, Vector) ? methods : [methods]
 
     for method in methods
         error[string(nameof(typeof(method)))] = calculateError(
@@ -45,21 +52,27 @@ function calculateError(
         )
     end
 
-    println(
-        "shape_parameter: $(string(nameof(typeof((model.method.shape_parameter_method)))))"
-    )
-    println("samples: $(model.sim.samples)")
-    SurvivalSignatureUtils._print(error)
+    if verbose
+        println(
+            "shape_parameter: $(string(nameof(typeof((model.method.shape_parameter_method)))))",
+        )
+        println("samples: $(model.sim.samples)")
+        SurvivalSignatureUtils._print(error)
+    end
 
     return model, error
 end
 
 function calculateError(
-    methods::Vector{ErrorType}, arr1::Array, compare::Union{Model,Array}
+    methods::Union{ErrorType,Vector{ErrorType}},
+    arr1::Array{Float64},           # difference to include arrays, rather than entire models
+    compare::Union{Model,Array};
+    verbose::Bool=false,
 )
-    errors = Dict{String,Union{String,Float64}}()
+    errors = Dict{String,Float64}()
 
     compare_solution = isa(compare, Model) ? compare.Phi.solution : compare
+    methods = isa(methods, Vector) ? methods : [methods]
 
     for method in methods
         errors[string(nameof(typeof(method)))] = calculateError(
@@ -69,14 +82,16 @@ function calculateError(
 
     errors["name"] = "unknown"
 
-    SurvivalSignatureUtils._print(errors)
+    if verbose
+        SurvivalSignatureUtils._print(errors)
+    end
 
     return errors
 end
 
 # ==============================================================================
 
-function calculateError(method::RMSE, arr1::Array, arr2::Array)
+function calculateError(method::RMSE, arr1::Array{Float64}, arr2::Array{Float64})
     # root mean sqauared error:
 
     # rmse = sqrt( Σ (y_i - ŷ_i)^2 / N )s
@@ -88,7 +103,9 @@ function calculateError(method::RMSE, arr1::Array, arr2::Array)
     return sqrt(sum((arr1 .- arr2) .^ 2) / prod(size(arr1)))
 end
 
-function calculateError(method::RAE, true_values::Array, predicted_values::Array)
+function calculateError(
+    method::RAE, true_values::Array{Float64}, predicted_values::Array{Float64}
+)
     # relative absolute error:
 
     # rae = Σ |y_i - ŷ_i| / Σ |y_i - ȳ|
@@ -97,7 +114,7 @@ function calculateError(method::RAE, true_values::Array, predicted_values::Array
     #   ŷ_i = predicted_values
     #   ȳ = mean of true_values
 
-    function absoluteSum(arr1::Array, arr2::Union{Number,Array})
+    function absoluteSum(arr1::Array{Float64}, arr2::Union{Number,Array{Float64}})
         return sum(abs.(arr1 .- arr2))
     end
 
@@ -105,7 +122,7 @@ function calculateError(method::RAE, true_values::Array, predicted_values::Array
            absoluteSum(true_values, Statistics.mean(true_values))
 end
 
-function calculateError(method::NORM, weights::Array, old_weights::Array)
+function calculateError(method::NORM, weights::Array{Float64}, old_weights::Array{Float64})
     # _norm to avoid overlap with third-party functions
     return LinearAlgebra.norm(weights - old_weights)
 end

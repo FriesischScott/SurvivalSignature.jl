@@ -9,7 +9,7 @@ using ProgressMeter
 # ==============================================================================
 
 using ..SurvivalSignatureUtils
-using ..Structures: Points, System, Simulation, Methods
+using ..Structures: Points, System, Simulation, Methods, AdaptiveRefinementMethod
 using ..Evaluation
 using ..BasisFunction
 using ..ShapeParameter
@@ -25,6 +25,7 @@ export adaptiveRefinement
 # ==============================================================================
 
 function adaptiveRefinement(
+    adaptive_refinement_method::AdaptiveRefinementMethod,
     total_points::Points,
     evaluated_points::Points,
     sys::System,
@@ -47,7 +48,7 @@ function adaptiveRefinement(
         sim.weight_change_tolerance, "\tAdaptive Refinement:"
     )
     stop = 0
-    while stop < 2
+    while stop < 2 && length(candidates) > 0
         function s(a::Points)
             return (BasisFunction.basis(methods.basis_function_method, shape_parameter, a.coordinates, centers) * weights)[1]
         end

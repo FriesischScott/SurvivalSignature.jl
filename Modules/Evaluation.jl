@@ -21,7 +21,7 @@ function evaluate(model::Model)::Model
     for idx in CartesianIndices(model.Phi.coordinates)
         @assert [Tuple(idx)...] == model.Phi.coordinates[idx]
 
-        if isinf(model.Phi.solution[idx])
+        if isinf(model.Phi.solution[idx])   # only evaluate non-evaluated points
             model.Phi.solution[idx] = evaluateSurrogate(
                 model.Phi.coordinates[idx],
                 model.model.weights,
@@ -31,6 +31,7 @@ function evaluate(model::Model)::Model
             )
         end
     end
+
     return model
 end
 
@@ -46,6 +47,12 @@ function evaluateSurrogate(
     )
 
     s = (basis * weights)[1]
+
+    # if s <= 0.0
+    #     println("State Vector: $state_vector")
+    #     println("Shape Parameter: $shape_parameter")
+    #     println("Prediction: $s")
+    # end
 
     # fit between 0 and 1 
     return min(max(s, 0.0), 1.0)

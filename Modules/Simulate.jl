@@ -6,7 +6,9 @@ module Simulate
 using ..SurvivalSignatureUtils
 using ..Structures: System, Simulation, Methods, Points, Model
 using ..Structures: SimulationType, MonteCarloSimulation, IntervalPredictorSimulation
-using ..Structures: MonteCarloModel
+using ..Structures: MonteCarloModel, PredictorModel
+using ..Structures: Metrics
+
 using ..Evaluation
 using ..StartingPoints
 using ..Centers
@@ -25,7 +27,11 @@ export simulate
 # ==============================================================================
 
 function simulate(
-    methods::Vector{Methods}, sys::System, sims::Vector{Simulation}; verbose::Bool=false
+    methods::Vector{Methods},
+    sys::System,
+    sims::Vector{Simulation};
+    verbose::Bool=false,
+    shape_parameter::Union{Nothing,Float64}=nothing,
 )::Matrix{Model}
 
     # Initialize the signatures array
@@ -34,7 +40,12 @@ function simulate(
     for (i, method) in enumerate(methods)   # columns
         for (j, sim) in enumerate(sims) #   # rows
             signatures[i, j] = simulate(
-                method.simulation_method, sys, sim, method; verbose=verbose
+                method.simulation_method,
+                sys,
+                sim,
+                method;
+                verbose=verbose,
+                shape_parameter=shape_parameter,
             )
         end
     end
@@ -43,7 +54,11 @@ function simulate(
 end
 
 function simulate(
-    methods::Vector{Methods}, sys::System, sim::Simulation; verbose::Bool=false
+    methods::Vector{Methods},
+    sys::System,
+    sim::Simulation;
+    verbose::Bool=false,
+    shape_parameter::Union{Nothing,Float64}=nothing,
 )::Vector{Model}
 
     # Length check
@@ -55,7 +70,12 @@ function simulate(
     # Iterate over the elements of all vectors simultaneously
     for (i, method) in enumerate(methods)
         signatures[i] = simulate(
-            method.simulation_method, sys, sim, method; verbose=verbose
+            method.simulation_method,
+            sys,
+            sim,
+            method;
+            verbose=verbose,
+            shape_parameter=shape_parameter,
         )
     end
 
@@ -63,7 +83,11 @@ function simulate(
 end
 
 function simulate(
-    method::Methods, sys::System, sims::Vector{Simulation}; verbose::Bool=false
+    method::Methods,
+    sys::System,
+    sims::Vector{Simulation};
+    verbose::Bool=false,
+    shape_parameter::Union{Nothing,Float64}=nothing,
 )::Vector{Model}
 
     # Initialize the signatures array
@@ -72,15 +96,33 @@ function simulate(
     # Iterate over the elements of all vectors simultaneously
     for (i, sim) in enumerate(sims)
         signatures[i] = simulate(
-            method.simulation_method, sys, sim, method; verbose=verbose
+            method.simulation_method,
+            sys,
+            sim,
+            method;
+            verbose=verbose,
+            shape_parameter=shape_parameter,
         )
     end
 
     return signatures
 end
 
-function simulate(method::Methods, sys::System, sim::Simulation; verbose::Bool=false)::Model
-    return simulate(method.simulation_method, sys, sim, method; verbose=verbose)
+function simulate(
+    method::Methods,
+    sys::System,
+    sim::Simulation;
+    verbose::Bool=false,
+    shape_parameter::Union{Nothing,Float64}=nothing,
+)::Model
+    return simulate(
+        method.simulation_method,
+        sys,
+        sim,
+        method;
+        verbose=verbose,
+        shape_parameter=shape_parameter,
+    )
 end
 
 function simulate(
@@ -89,7 +131,10 @@ function simulate(
     sim::Simulation,
     methods::Methods;
     verbose::Bool=false,
+    shape_parameter::Union{Nothing,Float64}=nothing,
 )::Model
+    start_time = time_ns()
+
     if verbose
         printDetails(sys, sim, methods)
     end
@@ -117,7 +162,7 @@ function simulate(
     # ==========================================================================
 
     # clean-up unnessesary method definitions
-    methods = Methods(method, nothing, nothing, nothing, nothing, nothing)
+    methods = Methods(method, nothing, nothing, nothing, nothing, nothing, nothing)
 
     Phi = expandPhi!(Phi, state_vectors)        # resize Phi to full (non-percolated) version
     Phi = reshapePhi!(Phi)                      # reshape Phi to retangular arrays
@@ -125,12 +170,20 @@ function simulate(
     # might make more sense to start with this size
     # but many changes would be necessary   
 
-    signature = Model(Phi, MonteCarloModel(), sys, sim, methods, nothing)
+    signature = Model(Phi, MonteCarloModel(), sys, sim, methods, nothing, nothing)
 
     # ==========================================================================
+    # Timing
+    elapsed_time = (time_ns() - start_time) / 1e9       # in seconds
+    metrics = Metrics(elapsed_time)
+    signature.metrics = metrics
+
     if verbose
+        println("\tTime Elapsed: $(elapsed_time)s")
+        println(" ")
         println("Finished Successfully.\n")
     end
+
     return signature
 end
 
@@ -140,10 +193,13 @@ function simulate(
     sim::Simulation,
     methods::Methods;
     verbose::Bool=false,
+    shape_parameter::Union{Nothing,Float64}=nothing,
 )::Model
     if verbose
         printDetails(sys, sim, methods)
     end
+
+    start_time = time_ns()
 
     # =============================== PERCOLATION ==============================
     state_vectors, percolated_state_vectors, sim.threshold = Evaluation.generateStateVectors(
@@ -188,10 +244,15 @@ function simulate(
     if verbose
         println("Compute Shape Parameters...")
     end
-    shape_parameter = ShapeParameter.computeShapeParameter(
-        methods.shape_parameter_method, Phi.coordinates, starting_points, centers
-    )
+    if isnothing(shape_parameter)
+        shape_parameter = ShapeParameter.computeShapeParameter(
+            methods.shape_parameter_method, Phi.coordinates, starting_points, centers
+        )
+    else
+        shape_parameter = shape_parameter
+    end
     if verbose
+        println("\tShape Parameter: $(shape_parameter)")
         println("Shape Parameter Computed.\n")
     end
     # ============================ BASIC FUNCTION ==============================
@@ -220,6 +281,7 @@ function simulate(
     end
     # Taylor-Expansion Based Adaptive Design - Mo et al.
     evaluated_points, weights, upper_bound, lower_bound = AdaptiveRefinement.adaptiveRefinement(
+        methods.adaptive_refinement_method,
         Phi,
         starting_points,
         sys,
@@ -248,11 +310,11 @@ function simulate(
     Phi = mergePoints!(Phi, evaluated_points)   # fill evaluated values into Phi
     Phi = expandPhi!(Phi, state_vectors)        # resize Phi to full (non-percolated) version
     Phi = reshapePhi!(Phi)                      # reshape Phi to retangular arrays
-    # for the purpose of comparison
-    # might make more sense to start with this size
-    # but many changes would be necessary   
+    #                                           # for the purpose of comparison
+    #                                           # might make more sense to start with this size
+    #                                           # but many changes would be necessary   
 
-    signature = Model(Phi, ipm, sys, sim, methods, nothing) # struct
+    signature = Model(Phi, ipm, sys, sim, methods, nothing, nothing) # struct
 
     # ====================== EVALUATE REMAINING POINTS =========================
     if verbose
@@ -263,7 +325,15 @@ function simulate(
         println("Remaining Points Evaluated.\n")
     end
     # ==========================================================================
+
+    # Timing
+    elapsed_time = (time_ns() - start_time) / 1e9       # in seconds
+    metrics = Metrics(elapsed_time)
+    signature.metrics = metrics
+
     if verbose
+        println("Time Elapsed: $(elapsed_time)s")
+        println(" ")
         println("Finished Successfully.\n")
     end
 

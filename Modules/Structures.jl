@@ -11,10 +11,12 @@ export SimulationModel, MonteCarloModel, PredictorModel, Model
 export SimulationType, MonteCarloSimulation, IntervalPredictorSimulation
 
 export BasisFunctionMethod, Gaussian
-export ShapeParameterMethod, Hardy, Franke, Kuo, Rippa
+export ShapeParameterMethod, Hardy, Rippa, DirectAMLS, IndirectAMLS
 export CentersMethod, GridCenters
 export StartingMethod, GridStart
 export SystemMethod, GridSystem
+export AdaptiveRefinementMethod, TEAD
+export Metrics
 
 export ErrorType, RMSE, RAE, NORM, NRMSE
 
@@ -50,16 +52,12 @@ mutable struct Simulation
     end
 end
 
-# Adding comments within a struct with the macro @allow_nothing causes issues.
 mutable struct Points
     coordinates::Union{Array,Nothing}
     idx::Union{Number,Vector,Matrix,Nothing}
     solution::Union{Float64,Vector,Matrix,Nothing}
     confidence::Union{Float64,Vector,Matrix,Nothing}
 end
-
-# Coordinates will almost always be an Array, but Any allows for variable types 
-# used in some modules where it is unreasonable to predict or write them all 
 
 # ============================== BASIS FUNCTIONS ===============================
 
@@ -79,12 +77,30 @@ struct IntervalPredictorSimulation <: SimulationType end
 
 abstract type ShapeParameterMethod end
 struct Hardy <: ShapeParameterMethod end
-
-struct Franke <: ShapeParameterMethod end
-
-struct Kuo <: ShapeParameterMethod end
-
 struct Rippa <: ShapeParameterMethod end
+struct DirectAMLS <: ShapeParameterMethod
+    max_iterations::Int
+    tolerance::Float64
+
+    function DirectAMLS(
+        max_iterations::Union{Nothing,Int}=10, tolerance::Union{Nothing,Float64}=1e-6
+    )
+        return new(max_iterations, tolerance)
+    end
+end
+struct IndirectAMLS <: ShapeParameterMethod
+    max_iterations::Int
+    tolerance::Float64
+
+    function IndirectAMLS(
+        max_iterations::Union{Nothing,Int}=10, tolerance::Union{Nothing,Float64}=1e-6
+    )
+        return new(max_iterations, tolerance)
+    end
+end
+
+# struct Franke <: ShapeParameterMethod end   # only proven with MQ 
+# struct Kuo <: ShapeParameterMethod end      # only proven with MQ
 
 # ================================ SYSTEMS =====================================
 
@@ -93,6 +109,12 @@ abstract type SystemMethod end
 struct GridSystem <: SystemMethod
     dims::Tuple
 end
+
+# ================================ SYSTEMS =====================================
+
+abstract type AdaptiveRefinementMethod end
+
+struct TEAD <: AdaptiveRefinementMethod end
 
 # ================================ CENTERS =====================================
 
@@ -129,12 +151,16 @@ struct Methods
     centers_method::Union{CentersMethod,Nothing}
     weight_change_method::Union{ErrorType,Nothing}
     shape_parameter_method::Union{ShapeParameterMethod,Nothing}
-    basis_function_method::Union{Gaussian,Nothing}
+    basis_function_method::Union{BasisFunctionMethod,Nothing}
+    adaptive_refinement_method::Union{AdaptiveRefinementMethod,Nothing}
+end
+# ================================ DATA ========================================
+struct Metrics
+    time::Float64
+    # model_evaluations
 end
 
 # =========================== MODELS ===========================================
-# Used for Interval Predictor Models
-
 abstract type SimulationModel end
 
 struct MonteCarloModel <: SimulationModel end
@@ -154,6 +180,7 @@ mutable struct Model
     sys::System                                     # For post-processing access
     sim::Simulation
     method::Methods
+    metrics::Union{Metrics,Nothing}
     errors::Union{Dict{String,Float64},Nothing}     # starts nothing, then populated
 end
 

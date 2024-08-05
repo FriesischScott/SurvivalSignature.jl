@@ -7,7 +7,8 @@ using ..Structures:
     CentersMethod,
     ErrorType,
     ShapeParameterMethod,
-    BasisFunctionMethod
+    BasisFunctionMethod,
+    AdaptiveRefinementMethod
 
 # ==============================================================================
 
@@ -21,6 +22,7 @@ function compileMethods(
     weight_change_method::ErrorType,
     shape_parameter_method::ShapeParameterMethod,
     basis_function_method::BasisFunctionMethod,
+    adaptive_refinement_method::AdaptiveRefinementMethod,
 )
     return Structures.Methods(
         sim_method,
@@ -29,6 +31,7 @@ function compileMethods(
         weight_change_method,
         shape_parameter_method,
         basis_function_method,
+        adaptive_refinement_method,
     )
 end
 
@@ -39,6 +42,7 @@ function compileMethods(
     weight_change_method::ErrorType,
     shape_parameter_method::ShapeParameterMethod,
     basis_function_method::BasisFunctionMethod,
+    adaptive_refinement_method::AdaptiveRefinementMethod,
 )
     methods = Vector{Methods}(undef, length(sim_method))
     for (i, method) in enumerate(sim_method)
@@ -49,6 +53,7 @@ function compileMethods(
             weight_change_method,
             shape_parameter_method,
             basis_function_method,
+            adaptive_refinement_method,
         )
     end
 
@@ -61,7 +66,8 @@ function compileMethods(
     centers_method::CentersMethod,
     weight_change_method::ErrorType,
     shape_parameter_method::ShapeParameterMethod,
-    basis_function_method::BasisFunctionMethod,
+    basis_function_method::BasisFunctionMethod,#
+    adaptive_refinement_method::AdaptiveRefinementMethod,
 )
     methods = Vector{Methods}(undef, length(starting_points_method))
     for (i, method) in enumerate(starting_points_method)
@@ -72,6 +78,7 @@ function compileMethods(
             weight_change_method,
             shape_parameter_method,
             basis_function_method,
+            adaptive_refinement_method,
         )
     end
 
@@ -85,6 +92,7 @@ function compileMethods(
     weight_change_method::ErrorType,
     shape_parameter_method::ShapeParameterMethod,
     basis_function_method::BasisFunctionMethod,
+    adaptive_refinement_method::AdaptiveRefinementMethod,
 )
     methods = Vector{Methods}(undef, length(centers_method))
     for (i, method) in enumerate(centers_method)
@@ -95,6 +103,7 @@ function compileMethods(
             weight_change_method,
             shape_parameter_method,
             basis_function_method,
+            adaptive_refinement_method,
         )
     end
 
@@ -108,6 +117,7 @@ function compileMethods(
     weight_change_method::ErrorType,
     shape_parameter_method::ShapeParameterMethod,
     basis_function_method::BasisFunctionMethod,
+    adaptive_refinement_method::AdaptiveRefinementMethod,
 )
     methods = Vector{Methods}(undef, length(weight_change_method))
     for (i, method) in enumerate(weight_change_method)
@@ -118,6 +128,7 @@ function compileMethods(
             method,
             shape_parameter_method,
             basis_function_method,
+            adaptive_refinement_method,
         )
     end
 
@@ -131,6 +142,7 @@ function compileMethods(
     weight_change_method::ErrorType,
     shape_parameter_method::Vector{ShapeParameterMethod},
     basis_function_method::BasisFunctionMethod,
+    adaptive_refinement_method::AdaptiveRefinementMethod,
 )
     methods = Vector{Methods}(undef, length(shape_parameter_method))
     for (i, method) in enumerate(shape_parameter_method)
@@ -141,6 +153,7 @@ function compileMethods(
             weight_change_method,
             method,
             basis_function_method,
+            adaptive_refinement_method,
         )
     end
 
@@ -154,6 +167,7 @@ function compileMethods(
     weight_change_method::ErrorType,
     shape_parameter_method::ShapeParameterMethod,
     basis_function_method::Vector{BasisFunctionMethod},
+    adaptive_refinement_method::AdaptiveRefinementMethod,
 )
     methods = Vector{Methods}(undef, length(basis_function_method))
     for (i, method) in enumerate(basis_function_method)
@@ -163,6 +177,32 @@ function compileMethods(
             centers_method,
             weight_change_method,
             shape_parameter_method,
+            method,
+            adaptive_refinement_method,
+        )
+    end
+
+    return methods
+end
+
+function compileMethods(
+    sim_method::SimulationType,
+    starting_points_method::StartingMethod,
+    centers_method::CentersMethod,
+    weight_change_method::ErrorType,
+    shape_parameter_method::ShapeParameterMethod,
+    basis_function_method::BasisFunctionMethod,
+    adaptive_refinement_method::Vector{AdaptiveRefinementMethod},
+)
+    methods = Vector{Methods}(undef, length(adaptive_refinement_method))
+    for (i, method) in enumerate(adaptive_refinement_method)
+        methods[i] = Structures.Methods(
+            sim_method,
+            starting_points_method,
+            centers_method,
+            weight_change_method,
+            shape_parameter_method,
+            basis_function_method,
             method,
         )
     end
